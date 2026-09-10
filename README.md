@@ -92,7 +92,7 @@ Fill in `.env.local`:
 
 | Variable | Description |
 |---|---|
-| `NEXTAUTH_URL` | Base URL of the app, e.g. `http://localhost:3000` |
+| `NEXTAUTH_URL` | Base URL of the app, e.g. `http://localhost:3000`. Only needed locally — see "Deploying to Vercel" below. |
 | `NEXTAUTH_SECRET` | Random secret for session encryption — generate with `openssl rand -base64 32` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | From step 2 |
 | `ANTHROPIC_API_KEY` | From step 3 |
@@ -109,17 +109,28 @@ you'll land on the dashboard.
 
 ## Deploying to Vercel
 
-1. Import the repo into Vercel (framework preset: Next.js — auto-detected).
-2. In **Project → Settings → Environment Variables**, add `NEXTAUTH_URL`
-   (your production URL, e.g. `https://receipt-workflows.vercel.app`),
-   `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and
-   `ANTHROPIC_API_KEY`. Set these directly in the Vercel dashboard rather than
-   committing them anywhere.
-3. Add the production callback URL
-   (`https://<your-vercel-domain>/api/auth/callback/google`) to the Google
-   OAuth client's authorized redirect URIs (step 2 above).
-4. Deploy. No database, blob store, or other storage needs provisioning —
-   there isn't any (see "No server-side storage" above).
+`NEXTAUTH_URL` is derived automatically at runtime from Vercel's own
+`VERCEL_PROJECT_PRODUCTION_URL` / `VERCEL_URL` env vars (see `lib/env.ts`) —
+**do not set it in the Vercel dashboard**, only locally. That leaves exactly
+four things to configure per deploy:
+
+1. Import the repo into Vercel (framework preset: Next.js — auto-detected)
+   and deploy once, so you know the production URL Vercel assigned (e.g.
+   `https://receipt-workflows.vercel.app`, or a custom domain if you add
+   one).
+2. Add that URL's callback (`https://<your-vercel-domain>/api/auth/callback/google`)
+   to the Google OAuth client's authorized redirect URIs.
+3. In **Project → Settings → Environment Variables**, set `NEXTAUTH_SECRET`,
+   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `ANTHROPIC_API_KEY` — set
+   these directly in the Vercel dashboard rather than committing them
+   anywhere.
+4. Redeploy (Vercel does this automatically on env var changes, or trigger
+   one manually) so the new values take effect.
+
+No database, blob store, or other storage needs provisioning — there isn't
+any (see "No server-side storage" above). If you later add a custom domain,
+update the Google OAuth redirect URI to match it — `NEXTAUTH_URL` will still
+resolve automatically since `VERCEL_PROJECT_PRODUCTION_URL` tracks it.
 
 **File size limit:** Vercel serverless functions cap request bodies at
 4.5MB, so uploads are capped at 4MB client- and server-side to leave headroom
