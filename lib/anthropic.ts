@@ -1,5 +1,4 @@
 import Anthropic from '@anthropic-ai/sdk';
-import fs from 'fs';
 import type { ExtractedReceiptData } from './types';
 
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
@@ -36,11 +35,10 @@ function mimeToAnthropicMediaType(mimeType: string): string {
 }
 
 export async function extractReceiptData(
-  localPath: string,
+  fileBuffer: Buffer,
   mimeType: string
 ): Promise<ExtractedReceiptData> {
   const client = getClient();
-  const fileBuffer = fs.readFileSync(localPath);
   const base64 = fileBuffer.toString('base64');
 
   const isPdf = mimeType === 'application/pdf';

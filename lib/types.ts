@@ -1,23 +1,7 @@
-export interface Receipt {
-  id: string;
-  filename: string;
-  storedPath: string;
-  mimeType: string;
-  size: number;
-  uploadedAt: string;
-  vendor: string | null;
-  receiptDate: string | null;
-  amount: number | null;
-  currency: string | null;
-  category: string | null;
-  summary: string | null;
-  rawExtraction: string | null;
-  status: 'processing' | 'extracted' | 'extraction_failed';
-}
+export type WorkflowType = 'rename_upload_drive' | 'append_sheet_row';
 
 export interface WorkflowRun {
   id: string;
-  receiptId: string;
   workflowType: WorkflowType;
   status: 'success' | 'error';
   result: string | null;
@@ -25,7 +9,24 @@ export interface WorkflowRun {
   ranAt: string;
 }
 
-export type WorkflowType = 'rename_upload_drive' | 'append_sheet_row';
+export interface ReceiptFields {
+  filename: string;
+  mimeType: string;
+  vendor: string | null;
+  receiptDate: string | null;
+  amount: number | null;
+  currency: string | null;
+  category: string | null;
+  summary: string | null;
+}
+
+export interface ReceiptRecord extends ReceiptFields {
+  id: string;
+  size: number;
+  uploadedAt: string;
+  status: 'extracted' | 'extraction_failed';
+  runs: WorkflowRun[];
+}
 
 export interface Settings {
   driveFolderId: string;

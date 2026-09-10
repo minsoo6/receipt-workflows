@@ -11,7 +11,6 @@ export default function SettingsPanel({
   onSaved: (settings: Settings) => void;
 }) {
   const [form, setForm] = useState<Settings>(settings);
-  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   const update = (key: keyof Settings) => (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -19,20 +18,9 @@ export default function SettingsPanel({
     setSaved(false);
   };
 
-  const save = async () => {
-    setSaving(true);
-    try {
-      const res = await fetch('/api/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
-      });
-      const data = await res.json();
-      onSaved(data.settings);
-      setSaved(true);
-    } finally {
-      setSaving(false);
-    }
+  const save = () => {
+    onSaved(form);
+    setSaved(true);
   };
 
   return (
@@ -68,10 +56,10 @@ export default function SettingsPanel({
         </div>
       </div>
       <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button className="btn" onClick={save} disabled={saving}>
-          {saving ? 'Saving…' : 'Save settings'}
+        <button className="btn" onClick={save}>
+          Save settings
         </button>
-        {saved && <span className="hint">Saved</span>}
+        {saved && <span className="hint">Saved to this browser</span>}
       </div>
     </div>
   );

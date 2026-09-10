@@ -1,44 +1,79 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import UploadDropzone from './UploadDropzone';
 import SettingsPanel from './SettingsPanel';
 import ReceiptCard from './ReceiptCard';
-import type { Receipt, Settings, WorkflowRun } from '@/lib/types';
+import { loadHistory, loadSettings, saveHistory, saveSettings } from '@/lib/clientStorage';
+import { DEFAULT_SETTINGS } from '@/lib/types';
+import type { ReceiptRecord, Settings, WorkflowRun } from '@/lib/types';
 
-export type ReceiptWithRuns = Receipt & { runs: WorkflowRun[] };
+function genId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
 export default function Dashboard({ userEmail }: { userEmail: string | null }) {
   const { data: session } = useSession();
-  const [receipts, setReceipts] = useState<ReceiptWithRuns[]>([]);
-  const [settings, setSettings] = useState<Settings | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [history, setHistory] = useState<ReceiptRecord[]>([]);
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [loaded, setLoaded] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-
-  const refresh = useCallback(async () => {
-    const [receiptsRes, settingsRes] = await Promise.all([
-      fetch('/api/receipts'),
-      fetch('/api/settings')
-    ]);
-    if (receiptsRes.ok) {
-      const data = await receiptsRes.json();
-      setReceipts(data.receipts);
-    }
-    if (settingsRes.ok) {
-      const data = await settingsRes.json();
-      setSettings(data.settings);
-    }
-    setLoading(false);
-  }, []);
+  const filesRef = useRef<Map<string, File>>(new Map());
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    setHistory(loadHistory());
+    setSettings(loadSettings());
+    setLoaded(true);
+  }, []);
+
+  const persistHistory = useCallback((next: ReceiptRecord[]) => {
+    setHistory(next);
+    saveHistory(next);
+  }, []);
+
+  const handleSettingsSaved = useCallback((next: Settings) => {
+    setSettings(next);
+    saveSettings(next);
+  }, []);
+
+  const handleExtracted = useCallback(
+    (file: File, record: Omit<ReceiptRecord, 'id' | 'runs'>) => {
+      const id = genId();
+      filesRef.current.set(id, file);
+      const full: ReceiptRecord = { ...record, id, runs: [] };
+      persistHistory([full, ...history]);
+    },
+    [history, persistHistory]
+  );
+
+  const handleUpdate = useCallback(
+    (id: string, updates: Partial<ReceiptRecord>) => {
+      persistHistory(history.map((r) => (r.id === id ? { ...r, ...updates } : r)));
+    },
+    [history, persistHistory]
+  );
+
+  const handleRuns = useCallback(
+    (id: string, runs: WorkflowRun[]) => {
+      persistHistory(
+        history.map((r) => (r.id === id ? { ...r, runs: [...runs, ...r.runs] } : r))
+      );
+    },
+    [history, persistHistory]
+  );
+
+  const handleDelete = useCallback(
+    (id: string) => {
+      filesRef.current.delete(id);
+      persistHistory(history.filter((r) => r.id !== id));
+    },
+    [history, persistHistory]
+  );
 
   const sessionError = (session as any)?.error as string | undefined;
-  const needsDriveOrSheetSetup =
-    settings && !settings.driveFolderId && !settings.sheetId;
+  const needsDriveOrSheetSetup = loaded && !settings.driveFolderId && !settings.sheetId;
 
   return (
     <div className="container">
@@ -59,36 +94,48 @@ export default function Dashboard({ userEmail }: { userEmail: string | null }) {
         </div>
       )}
 
-      {!loading && needsDriveOrSheetSetup && (
+      {needsDriveOrSheetSetup && (
         <div className="error-banner" style={{ background: '#fef6e6', color: '#8a6d1f' }}>
           No Drive folder or Sheet configured yet. Open Settings below to set a destination folder
           and/or spreadsheet before running workflows.
         </div>
       )}
 
-      <UploadDropzone onUploaded={refresh} />
+      <div className="hint" style={{ marginBottom: 16 }}>
+        Receipt history and settings are stored only in this browser (localStorage) — nothing is
+        saved on the server. Uploaded files live in memory for this page session only; after a
+        reload, re-upload a receipt to run the Drive workflow again (the Sheet workflow still works
+        from saved details).
+      </div>
 
-      <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setSettingsOpen((v) => !v)}>
+      <UploadDropzone onExtracted={handleExtracted} />
+
+      <div
+        className="section-title"
+        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+        onClick={() => setSettingsOpen((v) => !v)}
+      >
         <span>Workflow settings</span>
         <span>{settingsOpen ? '−' : '+'}</span>
       </div>
-      {settingsOpen && settings && (
-        <SettingsPanel settings={settings} onSaved={(s) => setSettings(s)} />
-      )}
+      {settingsOpen && <SettingsPanel settings={settings} onSaved={handleSettingsSaved} />}
 
       <div className="section-title">Receipts</div>
-      {loading ? (
+      {!loaded ? (
         <div className="empty-state">Loading…</div>
-      ) : receipts.length === 0 ? (
+      ) : history.length === 0 ? (
         <div className="empty-state">No receipts uploaded yet. Drop one above to get started.</div>
       ) : (
         <div className="receipt-list">
-          {receipts.map((receipt) => (
+          {history.map((receipt) => (
             <ReceiptCard
               key={receipt.id}
               receipt={receipt}
               settings={settings}
-              onChanged={refresh}
+              file={filesRef.current.get(receipt.id) ?? null}
+              onUpdate={handleUpdate}
+              onRuns={handleRuns}
+              onDelete={handleDelete}
             />
           ))}
         </div>

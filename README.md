@@ -14,11 +14,37 @@ Receipt details are extracted automatically on upload using the Claude API
 ## Stack
 
 - Next.js 14 (App Router) + TypeScript
-- SQLite (`better-sqlite3`) for local storage of receipts, workflow run
-  history, and settings — stored in `data/receipts.db`
 - NextAuth with Google OAuth for sign-in and Drive/Sheets API access
 - `googleapis` for Drive uploads and Sheets appends
 - `@anthropic-ai/sdk` (Claude) for receipt data extraction
+
+## No server-side storage, by design
+
+This app keeps **no database and writes nothing to disk**. Every request is
+stateless:
+
+- Uploading a receipt sends it straight to `/api/extract`, which calls Claude
+  and returns the extracted fields — the file is held in memory for that one
+  request only and then discarded server-side.
+- The receipt file stays in the browser's memory (the `File` object from your
+  file picker/drop) for the rest of the page session. Clicking "Run selected
+  workflows" sends it again, directly to `/api/run`, which uploads it to
+  Drive and/or appends a Sheets row and returns the results — again, nothing
+  is written to server disk or a database.
+- Your **receipt history and workflow settings** (Drive folder ID, filename
+  template, Sheet ID, tab name) are saved in the browser's `localStorage`,
+  not on the server.
+
+Practical implications:
+
+- **Reloading the page** clears the in-memory file, so the "Rename & upload to
+  Drive" workflow becomes unavailable for older history entries (re-upload to
+  use it again) — but "Add row to Google Sheet" still works from the saved
+  field values, since it doesn't need the file itself.
+- History and settings are **per-browser**, not synced across devices or
+  shared between users signed into the same Google account elsewhere.
+- This makes the app a clean fit for serverless hosting (e.g. Vercel) — there's
+  no database or persistent volume to provision.
 
 ## Setup
 
@@ -39,8 +65,10 @@ npm install
    mode).
 4. **APIs & Services → Credentials → Create Credentials → OAuth client ID**:
    - Application type: Web application
-   - Authorized redirect URI: `http://localhost:3000/api/auth/callback/google`
-     (add your production URL's equivalent too, if deploying)
+   - Authorized redirect URI (local dev):
+     `http://localhost:3000/api/auth/callback/google`
+   - Authorized redirect URI (production, once deployed):
+     `https://<your-vercel-domain>/api/auth/callback/google`
 5. Copy the generated Client ID and Client Secret.
 
 > This app requests the broad `drive` and `spreadsheets` scopes (rather than
@@ -52,8 +80,7 @@ npm install
 
 ### 3. Get an Anthropic API key
 
-Create a key at [console.anthropic.com](https://console.anthropic.com/) and
-set it as `ANTHROPIC_API_KEY`.
+Create a key at [console.anthropic.com](https://console.anthropic.com/).
 
 ### 4. Configure environment variables
 
@@ -80,6 +107,26 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000), sign in with Google, and
 you'll land on the dashboard.
 
+## Deploying to Vercel
+
+1. Import the repo into Vercel (framework preset: Next.js — auto-detected).
+2. In **Project → Settings → Environment Variables**, add `NEXTAUTH_URL`
+   (your production URL, e.g. `https://receipt-workflows.vercel.app`),
+   `NEXTAUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and
+   `ANTHROPIC_API_KEY`. Set these directly in the Vercel dashboard rather than
+   committing them anywhere.
+3. Add the production callback URL
+   (`https://<your-vercel-domain>/api/auth/callback/google`) to the Google
+   OAuth client's authorized redirect URIs (step 2 above).
+4. Deploy. No database, blob store, or other storage needs provisioning —
+   there isn't any (see "No server-side storage" above).
+
+**File size limit:** Vercel serverless functions cap request bodies at
+4.5MB, so uploads are capped at 4MB client- and server-side to leave headroom
+for multipart overhead. This is enforced in both `/api/extract` and
+`/api/run` (`MAX_SIZE_BYTES` in `app/api/extract/route.ts` and
+`app/api/run/route.ts`).
+
 ## Using it
 
 1. **Sign in** with the Google account that owns (or has access to) your
@@ -91,27 +138,19 @@ you'll land on the dashboard.
      `docs.google.com/spreadsheets/d/<SHEET_ID>`) and a tab name (created
      automatically with a header row on first append if the tab is empty and
      already exists).
-3. **Drop a receipt** (JPEG/PNG/WebP/GIF/PDF, up to 15MB) onto the upload
-   area. Claude extracts vendor, date, amount, currency, category, and a
-   summary automatically.
+3. **Drop a receipt** (JPEG/PNG/WebP/GIF/PDF, up to 4MB). Claude extracts
+   vendor, date, amount, currency, category, and a summary automatically.
 4. **Review/edit** the extracted fields under "Edit details & run workflows"
-   if anything needs correcting.
+   if anything needs correcting — edits save to this browser as you tab away
+   from a field.
 5. **Check the workflows** you want to run (rename+upload, sheet row, or
    both) and click **Run selected workflows**. Results (success or error, with
    details) show up in the run log under the receipt.
 
-## Data & files
-
-- Uploaded receipt files are stored locally under `uploads/`.
-- Receipt metadata, extraction results, workflow run history, and settings
-  are stored in a local SQLite database at `data/receipts.db`.
-- Both directories are gitignored — nothing here is meant to be committed.
-
 ## Notes / limitations
 
-- This is built for single-user personal use — there's no multi-tenant
-  isolation; whoever can sign in with Google sees all uploaded receipts and
-  shares the same Drive/Sheet destination settings.
+- Built for single-user personal use in one browser — there's no
+  multi-tenant isolation or cross-device sync.
 - PDF extraction uses Claude's native PDF understanding; very low-quality
   scans may need manual correction after extraction.
 - Google access tokens are refreshed automatically using the stored refresh

@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import fs from 'fs';
+import { Readable } from 'stream';
 
 function driveClient(accessToken: string) {
   const auth = new google.auth.OAuth2();
@@ -15,7 +15,7 @@ function sheetsClient(accessToken: string) {
 
 export async function uploadFileToDrive(opts: {
   accessToken: string;
-  localPath: string;
+  fileBuffer: Buffer;
   filename: string;
   mimeType: string;
   folderId?: string;
@@ -28,7 +28,7 @@ export async function uploadFileToDrive(opts: {
     },
     media: {
       mimeType: opts.mimeType,
-      body: fs.createReadStream(opts.localPath)
+      body: Readable.from(opts.fileBuffer)
     },
     fields: 'id, webViewLink'
   });
