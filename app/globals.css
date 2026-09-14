@@ -317,6 +317,18 @@ button {
   word-break: break-all;
 }
 
+.preview-filename {
+  width: 100%;
+  font-family: inherit;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.preview-filename:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .preview-table-wrap {
   overflow-x: auto;
 }

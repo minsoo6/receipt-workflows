@@ -22,6 +22,17 @@ export function sanitizeForFilename(value: string): string {
     .trim();
 }
 
+/**
+ * Cleans a hand-typed filename and restores the original extension if the edit
+ * dropped it — Drive relies on it to preview the file correctly.
+ */
+export function normalizeFilename(name: string, originalFilename: string): string {
+  const ext = extensionOf(originalFilename);
+  const clean = sanitizeForFilename(name).slice(0, 120).trim();
+  if (!clean) return '';
+  return clean.toLowerCase().endsWith(ext.toLowerCase()) ? clean : `${clean}${ext}`;
+}
+
 export function buildFilename(
   template: string,
   fields: ReceiptFields,

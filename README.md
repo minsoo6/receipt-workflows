@@ -177,8 +177,14 @@ for multipart overhead. This is enforced in both `/api/extract` and
    if anything needs correcting — edits save to this browser as you tab away
    from a field.
 5. **Check the workflows** you want to run (rename+upload, sheet row, or
-   both) and click **Run selected workflows**. Results (success or error, with
-   details) show up in the run log under the receipt.
+   both). A preview appears showing exactly what will happen, and everything
+   in it is editable: the Drive **file name** and each **column value**. Edits
+   apply to that one run without changing the extracted receipt details, and
+   a reset link restores the derived values. An edited filename is cleaned of
+   illegal characters and keeps the original extension.
+6. Click **Run selected workflows**. Results (success or error, with details
+   including the name used and the exact per-column values written) show up in
+   the run log under the receipt.
 
 ## Notes / limitations
 

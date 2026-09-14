@@ -1,6 +1,6 @@
 import type { ReceiptFields, Settings, WorkflowType } from './types';
 import { inspectSheetTab, uploadFileToDrive, writeSheetRow } from './google';
-import { buildFilename } from './filename';
+import { buildFilename, normalizeFilename } from './filename';
 import { planSheetRow, planToRowValues, receiptFieldValues } from './sheetMapping';
 export { WORKFLOW_LABELS } from './workflowLabels';
 export { buildFilename } from './filename';
@@ -10,13 +10,16 @@ export async function runRenameUploadDrive(opts: {
   fileBuffer: Buffer;
   fields: ReceiptFields;
   settings: Settings;
+  /** Hand-edited name from the preview; falls back to the template when blank. */
+  filenameOverride?: string;
 }): Promise<{ result: string }> {
-  const { accessToken, fileBuffer, fields, settings } = opts;
+  const { accessToken, fileBuffer, fields, settings, filenameOverride } = opts;
   if (!settings.driveFolderId) {
-    throw new Error('No Google Drive folder configured. Set a Drive Folder ID in Settings.');
+    throw new Error('No Google Drive folder configured. Choose a destination folder in Settings.');
   }
 
-  const filename = buildFilename(settings.filenameTemplate, fields, settings.dateFormat);
+  const overridden = filenameOverride ? normalizeFilename(filenameOverride, fields.filename) : '';
+  const filename = overridden || buildFilename(settings.filenameTemplate, fields, settings.dateFormat);
   const { fileId, webViewLink } = await uploadFileToDrive({
     accessToken,
     fileBuffer,
@@ -96,6 +99,7 @@ export async function runWorkflow(
     settings: Settings;
     uploadedAt: string;
     columnOverrides?: Record<string, string>;
+    filenameOverride?: string;
   }
 ): Promise<{ result: string }> {
   switch (type) {
@@ -107,7 +111,8 @@ export async function runWorkflow(
         accessToken: opts.accessToken,
         fileBuffer: opts.fileBuffer,
         fields: opts.fields,
-        settings: opts.settings
+        settings: opts.settings,
+        filenameOverride: opts.filenameOverride
       });
     case 'append_sheet_row':
       return runAppendSheetRow({

@@ -26,6 +26,7 @@ export async function POST(req: NextRequest) {
   const uploadedAt = formData.get('uploadedAt');
   const file = formData.get('file');
   const overridesRaw = formData.get('columnOverrides');
+  const filenameOverrideRaw = formData.get('filenameOverride');
 
   if (typeof fieldsRaw !== 'string' || typeof settingsRaw !== 'string' || typeof workflowTypesRaw !== 'string') {
     return NextResponse.json({ error: 'Missing fields, settings, or workflowTypes' }, { status: 400 });
@@ -65,7 +66,8 @@ export async function POST(req: NextRequest) {
         fields,
         settings,
         uploadedAt: typeof uploadedAt === 'string' ? uploadedAt : new Date().toISOString(),
-        columnOverrides
+        columnOverrides,
+        filenameOverride: typeof filenameOverrideRaw === 'string' ? filenameOverrideRaw : undefined
       });
       results.push({
         id: randomUUID(),
