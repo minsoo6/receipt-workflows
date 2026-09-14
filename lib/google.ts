@@ -46,50 +46,60 @@ function quoteTabName(tabName: string): string {
 }
 
 /**
- * Writes a row into the first free row below all existing content.
+ * Reads the tab's header row and figures out where the next row goes.
  *
- * Deliberately not values.append: that resolves the "table" containing the
- * given range, so a blank row anywhere in the sheet makes it stop early and
- * write into the middle. Reading the used range and targeting lastRow + 1
- * always lands at the true bottom. Writes the header row first if the tab is
- * completely empty.
+ * The target row is computed from the used range rather than via values.append:
+ * append resolves the "table" containing its range, so a blank row anywhere in
+ * the sheet makes it stop early and write into the middle. values.get trims
+ * trailing empty rows, so the row count is the last row with content and
+ * lastRow + 1 is always the true bottom.
  */
-export async function writeRowAtBottom(opts: {
+export async function inspectSheetTab(opts: {
   accessToken: string;
   spreadsheetId: string;
   tabName: string;
-  header: string[];
-  row: (string | number)[];
-}): Promise<{ rowNumber: number; wroteHeader: boolean }> {
+}): Promise<{ headers: string[]; nextRow: number }> {
   const sheets = sheetsClient(opts.accessToken);
   const tab = quoteTabName(opts.tabName);
 
-  // values.get trims trailing empty rows, so this length is the last row with content.
   const existing = await sheets.spreadsheets.values.get({
     spreadsheetId: opts.spreadsheetId,
     range: `${tab}!A:Z`
   });
-  const usedRows = existing.data.values?.length ?? 0;
 
-  let wroteHeader = false;
-  if (usedRows === 0) {
+  const rows = existing.data.values ?? [];
+  const headers = (rows[0] ?? []).map((cell: unknown) => String(cell ?? ''));
+
+  return {
+    headers: headers.some((h) => h.trim() !== '') ? headers : [],
+    nextRow: rows.length === 0 ? 2 : rows.length + 1
+  };
+}
+
+export async function writeSheetRow(opts: {
+  accessToken: string;
+  spreadsheetId: string;
+  tabName: string;
+  rowNumber: number;
+  values: (string | number)[];
+  header?: string[];
+}): Promise<void> {
+  const sheets = sheetsClient(opts.accessToken);
+  const tab = quoteTabName(opts.tabName);
+
+  if (opts.header) {
     await sheets.spreadsheets.values.update({
       spreadsheetId: opts.spreadsheetId,
       range: `${tab}!A1`,
       valueInputOption: 'USER_ENTERED',
       requestBody: { values: [opts.header] }
     });
-    wroteHeader = true;
   }
-
-  const rowNumber = wroteHeader ? 2 : usedRows + 1;
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: opts.spreadsheetId,
-    range: `${tab}!A${rowNumber}`,
+    range: `${tab}!A${opts.rowNumber}`,
     valueInputOption: 'USER_ENTERED',
-    requestBody: { values: [opts.row] }
+    requestBody: { values: [opts.values] }
   });
-
-  return { rowNumber, wroteHeader };
 }

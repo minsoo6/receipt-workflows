@@ -3,26 +3,23 @@
 import { useState } from 'react';
 import type { Settings } from '@/lib/types';
 import { DATE_FORMAT_PRESETS, formatDate } from '@/lib/dateFormat';
+import { buildFilename } from '@/lib/filename';
+import type { ReceiptFields } from '@/lib/types';
 
 const PREVIEW_DATE = '2026-08-31';
-const PREVIEW_FIELDS = {
-  vendor: 'K&F Concept',
-  amount: '24.99',
-  currency: 'USD',
-  original: 'IMG_4821'
-};
+const PREVIEW_VENDOR = 'K&F Concept';
 
-function previewFilename(template: string, dateFormat: string): string {
-  return template
-    .replace('{date}', formatDate(PREVIEW_DATE, dateFormat))
-    .replace('{vendor}', PREVIEW_FIELDS.vendor)
-    .replace('{amount}', PREVIEW_FIELDS.amount)
-    .replace('{currency}', PREVIEW_FIELDS.currency)
-    .replace('{original}', PREVIEW_FIELDS.original)
-    .replace(/[/\\?%*:|"<>]/g, '-')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+// Uses the same builder as the real upload, so the preview can't drift from it.
+const PREVIEW_RECEIPT: ReceiptFields = {
+  filename: 'IMG_4821.png',
+  mimeType: 'image/png',
+  vendor: PREVIEW_VENDOR,
+  receiptDate: PREVIEW_DATE,
+  amount: 24.99,
+  currency: 'USD',
+  category: 'Office Supplies',
+  summary: 'Camera accessories'
+};
 
 export default function SettingsPanel({
   settings,
@@ -95,11 +92,10 @@ export default function SettingsPanel({
               wordBreak: 'break-all'
             }}
           >
-            {previewFilename(form.filenameTemplate, form.dateFormat) || '—'}
-            <span style={{ color: 'var(--text-muted)' }}>.png</span>
+            {buildFilename(form.filenameTemplate, PREVIEW_RECEIPT, form.dateFormat)}
           </div>
           <div className="hint">
-            How a receipt dated {PREVIEW_DATE} from {PREVIEW_FIELDS.vendor} would be named
+            How a receipt dated {PREVIEW_DATE} from {PREVIEW_VENDOR} would be named
           </div>
         </div>
         <div>

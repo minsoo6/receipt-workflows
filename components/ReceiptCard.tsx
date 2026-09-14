@@ -1,10 +1,19 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import type { ReceiptRecord, Settings, WorkflowRun, WorkflowType } from '@/lib/types';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ReceiptFields, ReceiptRecord, Settings, WorkflowRun, WorkflowType } from '@/lib/types';
 import { WORKFLOW_LABELS } from '@/lib/workflowLabels';
+import { buildFilename } from '@/lib/filename';
 
 const WORKFLOW_TYPES: WorkflowType[] = ['rename_upload_drive', 'append_sheet_row'];
+
+interface SheetPreview {
+  tabName: string;
+  nextRow: number;
+  createdHeader: boolean;
+  columns: { columnLetter: string; header: string; field: string | null; value: string }[];
+  unmapped: { field: string; label: string; value: string }[];
+}
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -38,6 +47,9 @@ export default function ReceiptCard({
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [sheetPreview, setSheetPreview] = useState<SheetPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const isImage = receipt.mimeType.startsWith('image/');
   const objectUrl = useMemo(() => {
@@ -55,13 +67,26 @@ export default function ReceiptCard({
     setFields((f) => ({ ...f, [key]: e.target.value }));
   };
 
-  const currentFieldValues = () => ({
-    vendor: fields.vendor || null,
-    receiptDate: fields.receiptDate || null,
-    amount: fields.amount ? Number(fields.amount) : null,
-    currency: fields.currency || null,
-    category: fields.category || null
-  });
+  const currentFieldValues = useCallback(
+    () => ({
+      vendor: fields.vendor || null,
+      receiptDate: fields.receiptDate || null,
+      amount: fields.amount ? Number(fields.amount) : null,
+      currency: fields.currency || null,
+      category: fields.category || null
+    }),
+    [fields]
+  );
+
+  const receiptFields: ReceiptFields = useMemo(
+    () => ({
+      filename: receipt.filename,
+      mimeType: receipt.mimeType,
+      summary: receipt.summary,
+      ...currentFieldValues()
+    }),
+    [receipt.filename, receipt.mimeType, receipt.summary, currentFieldValues]
+  );
 
   const saveFields = () => {
     onUpdate(receipt.id, currentFieldValues());
@@ -75,6 +100,60 @@ export default function ReceiptCard({
       return next;
     });
   };
+
+  const sheetSelected = selected.has('append_sheet_row');
+  const driveSelected = selected.has('rename_upload_drive');
+
+  // Keyed on the serialized inputs so edits refresh the preview, but a re-render
+  // that changes nothing doesn't re-hit the Sheets API.
+  const previewKey = JSON.stringify([
+    receiptFields,
+    settings.sheetId,
+    settings.sheetTabName,
+    settings.dateFormat
+  ]);
+
+  useEffect(() => {
+    if (!sheetSelected || !settings.sheetId) {
+      setSheetPreview(null);
+      setPreviewError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setPreviewLoading(true);
+    setPreviewError(null);
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/sheet-preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fields: receiptFields,
+            settings,
+            uploadedAt: receipt.uploadedAt
+          })
+        });
+        const data = await res.json();
+        if (cancelled) return;
+        if (!res.ok) throw new Error(data.error || 'Could not read the sheet');
+        setSheetPreview(data as SheetPreview);
+      } catch (err: any) {
+        if (cancelled) return;
+        setSheetPreview(null);
+        setPreviewError(err.message || 'Could not read the sheet');
+      } finally {
+        if (!cancelled) setPreviewLoading(false);
+      }
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheetSelected, previewKey]);
 
   const runWorkflows = async () => {
     if (selected.size === 0) return;
@@ -198,6 +277,83 @@ export default function ReceiptCard({
                   </label>
                 );
               })}
+            </div>
+
+            {(driveSelected || sheetSelected) && (
+              <div className="preview-panel">
+                <div className="preview-title">Preview — this is what will happen</div>
+
+                {driveSelected && (
+                  <div className="preview-block">
+                    <div className="preview-subtitle">Google Drive · file name</div>
+                    <div className="preview-value">
+                      {buildFilename(settings.filenameTemplate, receiptFields, settings.dateFormat)}
+                    </div>
+                  </div>
+                )}
+
+                {sheetSelected && (
+                  <div className="preview-block">
+                    <div className="preview-subtitle">
+                      Google Sheet
+                      {sheetPreview && ` · "${sheetPreview.tabName}" row ${sheetPreview.nextRow}`}
+                    </div>
+
+                    {previewLoading && <div className="hint">Reading the sheet&apos;s columns…</div>}
+
+                    {previewError && (
+                      <div className="error-banner" style={{ marginTop: 4 }}>{previewError}</div>
+                    )}
+
+                    {!previewLoading && !previewError && sheetPreview && (
+                      <>
+                        {sheetPreview.createdHeader && (
+                          <div className="hint" style={{ marginBottom: 6 }}>
+                            This tab is empty — a header row will be created first.
+                          </div>
+                        )}
+                        <div className="preview-table-wrap">
+                          <table className="preview-table">
+                            <thead>
+                              <tr>
+                                <th>Col</th>
+                                <th>Column header</th>
+                                <th>Value to write</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {sheetPreview.columns.map((column) => (
+                                <tr key={column.columnLetter} className={column.value ? '' : 'preview-row-empty'}>
+                                  <td className="preview-col-letter">{column.columnLetter}</td>
+                                  <td>{column.header || <em>(no header)</em>}</td>
+                                  <td>
+                                    {column.value ? (
+                                      <strong>{column.value}</strong>
+                                    ) : (
+                                      <span className="preview-untouched">left blank</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {sheetPreview.unmapped.length > 0 && (
+                          <div className="hint" style={{ marginTop: 6, color: 'var(--danger)' }}>
+                            No matching column for:{' '}
+                            {sheetPreview.unmapped.map((u) => `${u.label} (${u.value})`).join(', ')} —
+                            add a column with that name to include it.
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div style={{ marginTop: 12 }}>
               <button className="btn" onClick={runWorkflows} disabled={running || selected.size === 0}>
                 {running ? (
                   <>
