@@ -455,6 +455,24 @@ button {
   border-color: #e0cfa0;
 }
 
+.preview-input-guessed {
+  background: #eef4fb;
+  border-color: #c3d6ea;
+}
+
+.guess-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #e3edf8;
+  color: #2c5b8a;
+  font-size: 10px;
+  font-weight: 600;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 .link-button {
   background: none;
   border: none;

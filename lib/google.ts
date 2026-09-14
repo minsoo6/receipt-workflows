@@ -143,7 +143,7 @@ export async function inspectSheetTab(opts: {
   spreadsheetId: string;
   tabName: string;
   headerRow: number;
-}): Promise<{ headers: string[]; nextRow: number }> {
+}): Promise<{ headers: string[]; nextRow: number; sampleRows: string[][] }> {
   const sheets = sheetsClient(opts.accessToken);
   const tab = quoteTabName(opts.tabName);
   const headerRow = Math.max(1, Math.floor(opts.headerRow || 1));
@@ -156,9 +156,18 @@ export async function inspectSheetTab(opts: {
   const rows = existing.data.values ?? [];
   const headers = (rows[headerRow - 1] ?? []).map((cell: unknown) => String(cell ?? ''));
 
+  // The last few populated rows below the header, as examples of how this sheet
+  // is actually filled in (vocabulary, casing, formats).
+  const sampleRows = rows
+    .slice(headerRow)
+    .filter((row: unknown[]) => row.some((cell) => String(cell ?? '').trim() !== ''))
+    .slice(-5)
+    .map((row: unknown[]) => row.map((cell) => String(cell ?? '')));
+
   return {
     headers: headers.some((h) => h.trim() !== '') ? headers : [],
-    nextRow: Math.max(rows.length + 1, headerRow + 1)
+    nextRow: Math.max(rows.length + 1, headerRow + 1),
+    sampleRows
   };
 }
 

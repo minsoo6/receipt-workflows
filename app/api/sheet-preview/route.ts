@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import type { Session } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { inspectSheetTab } from '@/lib/google';
+import { guessColumnValues } from '@/lib/anthropic';
 import { planSheetRow, receiptFieldValues } from '@/lib/sheetMapping';
 import type { ReceiptFields, Settings } from '@/lib/types';
 
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
   const tabName = settings.sheetTabName || 'Receipts';
 
   try {
-    const { headers, nextRow } = await inspectSheetTab({
+    const { headers, nextRow, sampleRows } = await inspectSheetTab({
       accessToken: session.accessToken,
       spreadsheetId: settings.sheetId,
       tabName,
@@ -40,7 +41,28 @@ export async function POST(req: NextRequest) {
     const values = receiptFieldValues(fields, uploadedAt, settings.dateFormat);
     const plan = planSheetRow(headers, values);
 
-    return NextResponse.json({ tabName, nextRow, ...plan });
+    let guesses: Record<string, string> = {};
+    if (body.includeGuesses) {
+      // Only columns that name-matching left empty, and only ones that are
+      // actually labelled — an unlabelled column has nothing to reason from.
+      const columnsToFill = plan.columns
+        .filter((column) => column.value === '' && column.header.trim() !== '')
+        .map((column) => ({ columnLetter: column.columnLetter, header: column.header }));
+
+      try {
+        guesses = await guessColumnValues({
+          headers: plan.columns.map((c) => ({ columnLetter: c.columnLetter, header: c.header })),
+          sampleRows,
+          columnsToFill,
+          fields
+        });
+      } catch {
+        // A failed guess shouldn't cost the user the preview itself.
+        guesses = {};
+      }
+    }
+
+    return NextResponse.json({ tabName, nextRow, guesses, ...plan });
   } catch (err: any) {
     return NextResponse.json(
       { error: err?.message ?? 'Could not read the sheet' },
