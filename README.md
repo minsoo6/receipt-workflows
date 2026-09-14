@@ -142,11 +142,11 @@ for multipart overhead. This is enforced in both `/api/extract` and
 
 1. **Sign in** with the Google account that owns (or has access to) your
    destination Drive folder and/or Sheet.
-2. **Open "Workflow settings"** and paste in:
-   - A Drive **Folder ID** (from its URL:
-     `drive.google.com/drive/folders/<FOLDER_ID>`), a filename template, and a
-     date format. A live preview shows exactly how a sample receipt would be
-     named as you type.
+2. **Open "Workflow settings"** and choose your destinations:
+   - **Destination folder in Google Drive** — click Choose to browse your
+     Drive (with breadcrumbs and search) and pick a folder; no IDs to copy.
+   - A filename template and a date format. A live preview shows exactly how
+     a sample receipt would be named as you type.
      - Filename tokens: `{date}` `{vendor}` `{amount}` `{currency}` `{original}`
      - Date format tokens: `YYYY` `YY` `MMMM` `MMM` `MM` `M` `DD` `D` —
        anything else in the format is kept literally. So `YYYYMMDD` gives
@@ -154,11 +154,17 @@ for multipart overhead. This is enforced in both `/api/extract` and
        `20260831 receipt - K&F Concept.png`.
      - Only characters that are illegal in filenames (`/ \ ? % * : | " < >`)
        are replaced; spaces, `&`, and `-` are preserved as written.
-   - A Sheet **ID** (from its URL:
-     `docs.google.com/spreadsheets/d/<SHEET_ID>`) and a tab name. Rows are
-     written to the first free row below all existing content, so blank rows
-     in the middle of the sheet never cause a row to land in the wrong place.
-     If the tab is completely empty, a header row is written first.
+   - **Google Sheet** — click Choose to search and pick a spreadsheet, then
+     select a tab from the dropdown (tabs are read from the sheet you picked).
+     Rows are written to the first free row below all existing content, so
+     blank rows in the middle of the sheet never cause a row to land in the
+     wrong place. If the tab is completely empty, a header row is written
+     first.
+   - Columns are matched to your sheet's **existing header names** — a sheet
+     with `Merchant` / `Total` / `Notes` gets the vendor, amount, and summary
+     in the right places, and columns the app doesn't recognize are left
+     untouched. Before running, a preview shows the target row and exactly
+     what value lands in each column.
 3. **Drop a receipt** (JPEG/PNG/WebP/GIF/PDF, up to 4MB). Claude extracts
    vendor, date, amount, currency, category, and a summary automatically.
 4. **Review/edit** the extracted fields under "Edit details & run workflows"

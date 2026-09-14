@@ -13,6 +13,89 @@ function sheetsClient(accessToken: string) {
   return google.sheets({ version: 'v4', auth });
 }
 
+export const FOLDER_MIME = 'application/vnd.google-apps.folder';
+export const SPREADSHEET_MIME = 'application/vnd.google-apps.spreadsheet';
+
+export interface DriveItem {
+  id: string;
+  name: string;
+  modifiedTime: string | null;
+}
+
+// Drive query strings are single-quote delimited, so a quote in user input
+// would otherwise break out of the term.
+function escapeDriveQuery(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+/**
+ * Lists folders or spreadsheets. With a search term the whole Drive is
+ * searched; otherwise folders are listed as children of `parentId` so the
+ * picker can browse, and spreadsheets are listed most-recent-first.
+ */
+export async function listDriveItems(opts: {
+  accessToken: string;
+  mimeType: string;
+  parentId?: string;
+  search?: string;
+}): Promise<DriveItem[]> {
+  const drive = driveClient(opts.accessToken);
+  const search = opts.search?.trim();
+
+  const clauses = [`mimeType='${opts.mimeType}'`, 'trashed=false'];
+  if (search) {
+    clauses.push(`name contains '${escapeDriveQuery(search)}'`);
+  } else if (opts.mimeType === FOLDER_MIME) {
+    clauses.push(`'${escapeDriveQuery(opts.parentId || 'root')}' in parents`);
+  }
+
+  const res = await drive.files.list({
+    q: clauses.join(' and '),
+    fields: 'files(id, name, modifiedTime)',
+    orderBy: opts.mimeType === FOLDER_MIME && !search ? 'name' : 'modifiedTime desc',
+    pageSize: 100,
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true
+  });
+
+  return (res.data.files ?? []).map((file) => ({
+    id: file.id!,
+    name: file.name ?? '(untitled)',
+    modifiedTime: file.modifiedTime ?? null
+  }));
+}
+
+export async function getDriveItemName(opts: {
+  accessToken: string;
+  fileId: string;
+}): Promise<string | null> {
+  const drive = driveClient(opts.accessToken);
+  try {
+    const res = await drive.files.get({
+      fileId: opts.fileId,
+      fields: 'name',
+      supportsAllDrives: true
+    });
+    return res.data.name ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function listSheetTabs(opts: {
+  accessToken: string;
+  spreadsheetId: string;
+}): Promise<string[]> {
+  const sheets = sheetsClient(opts.accessToken);
+  const res = await sheets.spreadsheets.get({
+    spreadsheetId: opts.spreadsheetId,
+    fields: 'sheets(properties(title))'
+  });
+  return (res.data.sheets ?? [])
+    .map((sheet) => sheet.properties?.title)
+    .filter((title): title is string => Boolean(title));
+}
+
 export async function uploadFileToDrive(opts: {
   accessToken: string;
   fileBuffer: Buffer;
