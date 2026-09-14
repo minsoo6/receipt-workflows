@@ -32,6 +32,7 @@ export interface Settings {
   driveFolderId: string;
   driveFolderName: string;
   filenameTemplate: string;
+  dateFormat: string;
   sheetId: string;
   sheetName: string;
   sheetTabName: string;
@@ -40,7 +41,8 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   driveFolderId: '',
   driveFolderName: '',
-  filenameTemplate: '{date}_{vendor}_{amount}',
+  filenameTemplate: '{date} receipt - {vendor}',
+  dateFormat: 'YYYYMMDD',
   sheetId: '',
   sheetName: '',
   sheetTabName: 'Receipts'

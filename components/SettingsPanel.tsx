@@ -2,6 +2,27 @@
 
 import { useState } from 'react';
 import type { Settings } from '@/lib/types';
+import { DATE_FORMAT_PRESETS, formatDate } from '@/lib/dateFormat';
+
+const PREVIEW_DATE = '2026-08-31';
+const PREVIEW_FIELDS = {
+  vendor: 'K&F Concept',
+  amount: '24.99',
+  currency: 'USD',
+  original: 'IMG_4821'
+};
+
+function previewFilename(template: string, dateFormat: string): string {
+  return template
+    .replace('{date}', formatDate(PREVIEW_DATE, dateFormat))
+    .replace('{vendor}', PREVIEW_FIELDS.vendor)
+    .replace('{amount}', PREVIEW_FIELDS.amount)
+    .replace('{currency}', PREVIEW_FIELDS.currency)
+    .replace('{original}', PREVIEW_FIELDS.original)
+    .replace(/[/\\?%*:|"<>]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 export default function SettingsPanel({
   settings,
@@ -39,6 +60,47 @@ export default function SettingsPanel({
           <label>Filename template</label>
           <input value={form.filenameTemplate} onChange={update('filenameTemplate')} />
           <div className="hint">Tokens: {'{date} {vendor} {amount} {currency} {original}'}</div>
+        </div>
+        <div>
+          <label>Date format</label>
+          <input value={form.dateFormat} onChange={update('dateFormat')} placeholder="YYYYMMDD" />
+          <div className="hint">
+            Tokens: YYYY YY MMMM MMM MM M DD D — everything else is kept literally
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+            {DATE_FORMAT_PRESETS.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                className="btn-secondary"
+                style={{ fontSize: 11, padding: '3px 8px' }}
+                onClick={() => {
+                  setForm((f) => ({ ...f, dateFormat: preset }));
+                  setSaved(false);
+                }}
+              >
+                {formatDate(PREVIEW_DATE, preset)}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="full">
+          <label>Preview</label>
+          <div
+            style={{
+              fontSize: 13,
+              padding: '8px 10px',
+              background: '#f0f0ee',
+              borderRadius: 6,
+              wordBreak: 'break-all'
+            }}
+          >
+            {previewFilename(form.filenameTemplate, form.dateFormat) || '—'}
+            <span style={{ color: 'var(--text-muted)' }}>.png</span>
+          </div>
+          <div className="hint">
+            How a receipt dated {PREVIEW_DATE} from {PREVIEW_FIELDS.vendor} would be named
+          </div>
         </div>
         <div>
           <label>Google Sheet ID</label>

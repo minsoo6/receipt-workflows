@@ -144,11 +144,21 @@ for multipart overhead. This is enforced in both `/api/extract` and
    destination Drive folder and/or Sheet.
 2. **Open "Workflow settings"** and paste in:
    - A Drive **Folder ID** (from its URL:
-     `drive.google.com/drive/folders/<FOLDER_ID>`) and a filename template.
+     `drive.google.com/drive/folders/<FOLDER_ID>`), a filename template, and a
+     date format. A live preview shows exactly how a sample receipt would be
+     named as you type.
+     - Filename tokens: `{date}` `{vendor}` `{amount}` `{currency}` `{original}`
+     - Date format tokens: `YYYY` `YY` `MMMM` `MMM` `MM` `M` `DD` `D` —
+       anything else in the format is kept literally. So `YYYYMMDD` gives
+       `20260831`, and a template of `{date} receipt - {vendor}` produces
+       `20260831 receipt - K&F Concept.png`.
+     - Only characters that are illegal in filenames (`/ \ ? % * : | " < >`)
+       are replaced; spaces, `&`, and `-` are preserved as written.
    - A Sheet **ID** (from its URL:
-     `docs.google.com/spreadsheets/d/<SHEET_ID>`) and a tab name (created
-     automatically with a header row on first append if the tab is empty and
-     already exists).
+     `docs.google.com/spreadsheets/d/<SHEET_ID>`) and a tab name. Rows are
+     written to the first free row below all existing content, so blank rows
+     in the middle of the sheet never cause a row to land in the wrong place.
+     If the tab is completely empty, a header row is written first.
 3. **Drop a receipt** (JPEG/PNG/WebP/GIF/PDF, up to 4MB). Claude extracts
    vendor, date, amount, currency, category, and a summary automatically.
 4. **Review/edit** the extracted fields under "Edit details & run workflows"

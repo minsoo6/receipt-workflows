@@ -1,20 +1,22 @@
 import path from 'path';
 import type { ReceiptFields, Settings, WorkflowType } from './types';
-import { appendRowToSheet, ensureSheetHeaderRow, uploadFileToDrive } from './google';
+import { uploadFileToDrive, writeRowAtBottom } from './google';
+import { formatDate } from './dateFormat';
 export { WORKFLOW_LABELS } from './workflowLabels';
 
+// Only strips characters that are illegal in filenames on common platforms.
+// Spaces, "&", and "-" are preserved so templates read as written.
 function sanitizeForFilename(value: string): string {
   return value
-    .trim()
     .replace(/[/\\?%*:|"<>]/g, '-')
-    .replace(/\s+/g, '_')
-    .slice(0, 80);
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
-export function buildFilename(template: string, fields: ReceiptFields): string {
+export function buildFilename(template: string, fields: ReceiptFields, dateFormat: string): string {
   const ext = path.extname(fields.filename) || '';
-  const vendor = sanitizeForFilename(fields.vendor || 'unknown-vendor');
-  const date = fields.receiptDate || 'unknown-date';
+  const vendor = fields.vendor || 'unknown-vendor';
+  const date = fields.receiptDate ? formatDate(fields.receiptDate, dateFormat) : 'unknown-date';
   const amount = fields.amount != null ? fields.amount.toFixed(2) : 'unknown-amount';
   const currency = fields.currency || '';
 
@@ -25,7 +27,7 @@ export function buildFilename(template: string, fields: ReceiptFields): string {
     .replace('{currency}', currency)
     .replace('{original}', path.basename(fields.filename, ext));
 
-  const cleanName = sanitizeForFilename(name);
+  const cleanName = sanitizeForFilename(name).slice(0, 120).trim();
   return cleanName.toLowerCase().endsWith(ext.toLowerCase()) ? cleanName : `${cleanName}${ext}`;
 }
 
@@ -40,7 +42,7 @@ export async function runRenameUploadDrive(opts: {
     throw new Error('No Google Drive folder configured. Set a Drive Folder ID in Settings.');
   }
 
-  const filename = buildFilename(settings.filenameTemplate, fields);
+  const filename = buildFilename(settings.filenameTemplate, fields, settings.dateFormat);
   const { fileId, webViewLink } = await uploadFileToDrive({
     accessToken,
     fileBuffer,
@@ -67,23 +69,13 @@ export async function runAppendSheetRow(opts: {
 
   const tabName = settings.sheetTabName || 'Receipts';
 
-  try {
-    await ensureSheetHeaderRow({
-      accessToken,
-      spreadsheetId: settings.sheetId,
-      tabName,
-      header: ['Date', 'Vendor', 'Amount', 'Currency', 'Category', 'Summary', 'Original Filename', 'Uploaded At']
-    });
-  } catch (err) {
-    // If the tab doesn't exist or header check fails, continue — append will still surface a clear error.
-  }
-
-  await appendRowToSheet({
+  const { rowNumber } = await writeRowAtBottom({
     accessToken,
     spreadsheetId: settings.sheetId,
     tabName,
+    header: ['Date', 'Vendor', 'Amount', 'Currency', 'Category', 'Summary', 'Original Filename', 'Uploaded At'],
     row: [
-      fields.receiptDate || '',
+      fields.receiptDate ? formatDate(fields.receiptDate, settings.dateFormat) : '',
       fields.vendor || '',
       fields.amount ?? '',
       fields.currency || '',
@@ -94,7 +86,7 @@ export async function runAppendSheetRow(opts: {
     ]
   });
 
-  return { result: `Appended row to "${tabName}" tab` };
+  return { result: `Added row ${rowNumber} to "${tabName}" tab` };
 }
 
 export async function runWorkflow(
