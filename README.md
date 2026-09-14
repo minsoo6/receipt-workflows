@@ -96,7 +96,7 @@ Fill in `.env.local`:
 | `NEXTAUTH_SECRET` | Random secret for session encryption — generate with `openssl rand -base64 32` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | From step 2 |
 | `ANTHROPIC_API_KEY` | From step 3 |
-| `ANTHROPIC_MODEL` | Optional, defaults to `claude-sonnet-5` |
+| `ANTHROPIC_MODEL` | Optional, defaults to `claude-haiku-4-5` |
 
 ### 5. Run it
 
