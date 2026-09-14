@@ -50,6 +50,9 @@ export default function ReceiptCard({
   const [sheetPreview, setSheetPreview] = useState<SheetPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  // Manual per-column edits, keyed by column letter. These win over the values
+  // derived from the receipt until explicitly reset.
+  const [columnEdits, setColumnEdits] = useState<Record<string, string>>({});
 
   const isImage = receipt.mimeType.startsWith('image/');
   const objectUrl = useMemo(() => {
@@ -177,6 +180,9 @@ export default function ReceiptCard({
       formData.append('settings', JSON.stringify(settings));
       formData.append('workflowTypes', JSON.stringify(Array.from(selected)));
       formData.append('uploadedAt', receipt.uploadedAt);
+      if (Object.keys(columnEdits).length > 0) {
+        formData.append('columnOverrides', JSON.stringify(columnEdits));
+      }
 
       const res = await fetch('/api/run', { method: 'POST', body: formData });
       const data = await res.json();
@@ -307,11 +313,11 @@ export default function ReceiptCard({
 
                     {!previewLoading && !previewError && sheetPreview && (
                       <>
-                        {sheetPreview.createdHeader && (
-                          <div className="hint" style={{ marginBottom: 6 }}>
-                            This tab is empty — a header row will be created first.
-                          </div>
-                        )}
+                        <div className="hint" style={{ marginBottom: 6 }}>
+                          {sheetPreview.createdHeader
+                            ? `This tab is empty — a header row will be created at row ${settings.headerRow}.`
+                            : `Columns read from row ${settings.headerRow}.`}
+                        </div>
                         <div className="preview-table-wrap">
                           <table className="preview-table">
                             <thead>
@@ -322,22 +328,44 @@ export default function ReceiptCard({
                               </tr>
                             </thead>
                             <tbody>
-                              {sheetPreview.columns.map((column) => (
-                                <tr key={column.columnLetter} className={column.value ? '' : 'preview-row-empty'}>
-                                  <td className="preview-col-letter">{column.columnLetter}</td>
-                                  <td>{column.header || <em>(no header)</em>}</td>
-                                  <td>
-                                    {column.value ? (
-                                      <strong>{column.value}</strong>
-                                    ) : (
-                                      <span className="preview-untouched">left blank</span>
-                                    )}
-                                  </td>
-                                </tr>
-                              ))}
+                              {sheetPreview.columns.map((column) => {
+                                const edited = Object.prototype.hasOwnProperty.call(
+                                  columnEdits,
+                                  column.columnLetter
+                                );
+                                const value = edited ? columnEdits[column.columnLetter] : column.value;
+                                return (
+                                  <tr key={column.columnLetter}>
+                                    <td className="preview-col-letter">{column.columnLetter}</td>
+                                    <td>{column.header || <em>(no header)</em>}</td>
+                                    <td>
+                                      <input
+                                        className={`preview-input ${edited ? 'preview-input-edited' : ''}`}
+                                        value={value}
+                                        placeholder="left blank"
+                                        onChange={(e) =>
+                                          setColumnEdits((edits) => ({
+                                            ...edits,
+                                            [column.columnLetter]: e.target.value
+                                          }))
+                                        }
+                                      />
+                                    </td>
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
+
+                        {Object.keys(columnEdits).length > 0 && (
+                          <div className="hint" style={{ marginTop: 6 }}>
+                            Edited values are written as typed.{' '}
+                            <button className="link-button" onClick={() => setColumnEdits({})}>
+                              Reset to extracted values
+                            </button>
+                          </div>
+                        )}
 
                         {sheetPreview.unmapped.length > 0 && (
                           <div className="hint" style={{ marginTop: 6, color: 'var(--danger)' }}>

@@ -36,6 +36,8 @@ export interface Settings {
   sheetId: string;
   sheetName: string;
   sheetTabName: string;
+  /** 1-based row holding the column names. */
+  headerRow: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -45,7 +47,8 @@ export const DEFAULT_SETTINGS: Settings = {
   dateFormat: 'YYYYMMDD',
   sheetId: '',
   sheetName: '',
-  sheetTabName: 'Receipts'
+  sheetTabName: 'Receipts',
+  headerRow: 1
 };
 
 export interface ExtractedReceiptData {

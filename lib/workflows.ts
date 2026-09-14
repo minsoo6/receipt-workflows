@@ -35,8 +35,10 @@ export async function runAppendSheetRow(opts: {
   fields: ReceiptFields;
   settings: Settings;
   uploadedAt: string;
+  /** Per-column edits from the preview, keyed by column letter; these win over derived values. */
+  columnOverrides?: Record<string, string>;
 }): Promise<{ result: string }> {
-  const { accessToken, fields, settings, uploadedAt } = opts;
+  const { accessToken, fields, settings, uploadedAt, columnOverrides } = opts;
   if (!settings.sheetId) {
     throw new Error('No Google Sheet configured. Set a Sheet ID in Settings.');
   }
@@ -46,11 +48,20 @@ export async function runAppendSheetRow(opts: {
   const { headers, nextRow } = await inspectSheetTab({
     accessToken,
     spreadsheetId: settings.sheetId,
-    tabName
+    tabName,
+    headerRow: settings.headerRow
   });
 
   const values = receiptFieldValues(fields, uploadedAt, settings.dateFormat);
   const plan = planSheetRow(headers, values);
+
+  if (columnOverrides) {
+    for (const column of plan.columns) {
+      if (Object.prototype.hasOwnProperty.call(columnOverrides, column.columnLetter)) {
+        column.value = columnOverrides[column.columnLetter];
+      }
+    }
+  }
 
   await writeSheetRow({
     accessToken,
@@ -58,7 +69,8 @@ export async function runAppendSheetRow(opts: {
     tabName,
     rowNumber: nextRow,
     values: planToRowValues(plan),
-    header: plan.createdHeader ? plan.columns.map((c) => c.header) : undefined
+    header: plan.createdHeader ? plan.columns.map((c) => c.header) : undefined,
+    headerRow: settings.headerRow
   });
 
   const written = plan.columns
@@ -83,6 +95,7 @@ export async function runWorkflow(
     fields: ReceiptFields;
     settings: Settings;
     uploadedAt: string;
+    columnOverrides?: Record<string, string>;
   }
 ): Promise<{ result: string }> {
   switch (type) {
@@ -101,7 +114,8 @@ export async function runWorkflow(
         accessToken: opts.accessToken,
         fields: opts.fields,
         settings: opts.settings,
-        uploadedAt: opts.uploadedAt
+        uploadedAt: opts.uploadedAt,
+        columnOverrides: opts.columnOverrides
       });
     default:
       throw new Error(`Unknown workflow type: ${type}`);

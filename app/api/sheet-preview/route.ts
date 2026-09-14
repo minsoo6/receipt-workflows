@@ -33,7 +33,8 @@ export async function POST(req: NextRequest) {
     const { headers, nextRow } = await inspectSheetTab({
       accessToken: session.accessToken,
       spreadsheetId: settings.sheetId,
-      tabName
+      tabName,
+      headerRow: settings.headerRow
     });
 
     const values = receiptFieldValues(fields, uploadedAt, settings.dateFormat);

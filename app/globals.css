@@ -363,6 +363,95 @@ button {
   font-style: italic;
 }
 
+.headerrow-table {
+  font-size: 11px;
+}
+
+.headerrow-table td {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.headerrow-row {
+  cursor: pointer;
+}
+
+.headerrow-row:hover td {
+  background: #f4f4f2;
+}
+
+.headerrow-selected td {
+  background: var(--success-bg);
+  font-weight: 600;
+}
+
+/* Wide enough for the radio plus a two-digit row number, so the shared
+   truncation rule above neither clips it nor lets it spill into column A. */
+.headerrow-table td.headerrow-num {
+  width: 64px;
+  min-width: 64px;
+  max-width: 64px;
+  white-space: nowrap;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: #f7f7f5;
+}
+
+/* Specific enough to beat `.settings-grid input { width: 100% }` regardless of
+   source order — this picker renders inside the settings grid. */
+.headerrow-table td.headerrow-num input[type='radio'] {
+  width: auto;
+  min-width: 0;
+  margin: 0 6px 0 0;
+  vertical-align: middle;
+}
+
+.preview-input {
+  width: 100%;
+  min-width: 120px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 600;
+  background: transparent;
+  color: var(--text);
+}
+
+.preview-input:hover {
+  border-color: var(--border);
+}
+
+.preview-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.preview-input::placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+  font-weight: 400;
+}
+
+.preview-input-edited {
+  background: #fdf6e3;
+  border-color: #e0cfa0;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+}
+
 .settings-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

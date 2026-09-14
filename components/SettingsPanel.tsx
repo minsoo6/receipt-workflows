@@ -6,6 +6,7 @@ import { DATE_FORMAT_PRESETS, formatDate } from '@/lib/dateFormat';
 import { buildFilename } from '@/lib/filename';
 import type { ReceiptFields } from '@/lib/types';
 import DrivePicker from './DrivePicker';
+import HeaderRowPicker from './HeaderRowPicker';
 
 const PREVIEW_DATE = '2026-08-31';
 const PREVIEW_VENDOR = 'K&F Concept';
@@ -196,6 +197,18 @@ export default function SettingsPanel({
                 : 'Choose a spreadsheet to list its tabs'}
           </div>
         </div>
+        <div className="full">
+          <label>Header row — which row holds your column names</label>
+          <HeaderRowPicker
+            sheetId={form.sheetId}
+            tabName={form.sheetTabName}
+            headerRow={form.headerRow}
+            onChange={(row) => {
+              setForm((f) => ({ ...f, headerRow: row }));
+              setSaved(false);
+            }}
+          />
+        </div>
       </div>
       <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
         <button className="btn" onClick={save}>
@@ -223,8 +236,15 @@ export default function SettingsPanel({
           title="Choose a spreadsheet to log receipts in"
           onClose={() => setPicker(null)}
           onSelect={(item) => {
-            // Tab names belong to the old sheet — clear so the reloaded list applies.
-            setForm((f) => ({ ...f, sheetId: item.id, sheetName: item.name, sheetTabName: '' }));
+            // Tab name and header row belong to the old sheet's layout — reset
+            // so the reloaded tab list and row grid apply to the new one.
+            setForm((f) => ({
+              ...f,
+              sheetId: item.id,
+              sheetName: item.name,
+              sheetTabName: '',
+              headerRow: 1
+            }));
             setSaved(false);
             setPicker(null);
           }}
