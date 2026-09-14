@@ -1,5 +1,5 @@
 import path from 'path';
-import type { Receipt, Settings, WorkflowType } from './types';
+import type { ReceiptFields, Settings, WorkflowType } from './types';
 import { appendRowToSheet, ensureSheetHeaderRow, uploadFileToDrive } from './google';
 export { WORKFLOW_LABELS } from './workflowLabels';
 
@@ -11,19 +11,19 @@ function sanitizeForFilename(value: string): string {
     .slice(0, 80);
 }
 
-export function buildFilename(template: string, receipt: Receipt): string {
-  const ext = path.extname(receipt.filename) || '';
-  const vendor = sanitizeForFilename(receipt.vendor || 'unknown-vendor');
-  const date = receipt.receiptDate || 'unknown-date';
-  const amount = receipt.amount != null ? receipt.amount.toFixed(2) : 'unknown-amount';
-  const currency = receipt.currency || '';
+export function buildFilename(template: string, fields: ReceiptFields): string {
+  const ext = path.extname(fields.filename) || '';
+  const vendor = sanitizeForFilename(fields.vendor || 'unknown-vendor');
+  const date = fields.receiptDate || 'unknown-date';
+  const amount = fields.amount != null ? fields.amount.toFixed(2) : 'unknown-amount';
+  const currency = fields.currency || '';
 
   const name = template
     .replace('{vendor}', vendor)
     .replace('{date}', date)
     .replace('{amount}', amount)
     .replace('{currency}', currency)
-    .replace('{original}', path.basename(receipt.filename, ext));
+    .replace('{original}', path.basename(fields.filename, ext));
 
   const cleanName = sanitizeForFilename(name);
   return cleanName.toLowerCase().endsWith(ext.toLowerCase()) ? cleanName : `${cleanName}${ext}`;
@@ -31,20 +31,21 @@ export function buildFilename(template: string, receipt: Receipt): string {
 
 export async function runRenameUploadDrive(opts: {
   accessToken: string;
-  receipt: Receipt;
+  fileBuffer: Buffer;
+  fields: ReceiptFields;
   settings: Settings;
 }): Promise<{ result: string }> {
-  const { accessToken, receipt, settings } = opts;
+  const { accessToken, fileBuffer, fields, settings } = opts;
   if (!settings.driveFolderId) {
     throw new Error('No Google Drive folder configured. Set a Drive Folder ID in Settings.');
   }
 
-  const filename = buildFilename(settings.filenameTemplate, receipt);
+  const filename = buildFilename(settings.filenameTemplate, fields);
   const { fileId, webViewLink } = await uploadFileToDrive({
     accessToken,
-    localPath: receipt.storedPath,
+    fileBuffer,
     filename,
-    mimeType: receipt.mimeType,
+    mimeType: fields.mimeType,
     folderId: settings.driveFolderId
   });
 
@@ -55,10 +56,11 @@ export async function runRenameUploadDrive(opts: {
 
 export async function runAppendSheetRow(opts: {
   accessToken: string;
-  receipt: Receipt;
+  fields: ReceiptFields;
   settings: Settings;
+  uploadedAt: string;
 }): Promise<{ result: string }> {
-  const { accessToken, receipt, settings } = opts;
+  const { accessToken, fields, settings, uploadedAt } = opts;
   if (!settings.sheetId) {
     throw new Error('No Google Sheet configured. Set a Sheet ID in Settings.');
   }
@@ -81,14 +83,14 @@ export async function runAppendSheetRow(opts: {
     spreadsheetId: settings.sheetId,
     tabName,
     row: [
-      receipt.receiptDate || '',
-      receipt.vendor || '',
-      receipt.amount ?? '',
-      receipt.currency || '',
-      receipt.category || '',
-      receipt.summary || '',
-      receipt.filename,
-      receipt.uploadedAt
+      fields.receiptDate || '',
+      fields.vendor || '',
+      fields.amount ?? '',
+      fields.currency || '',
+      fields.category || '',
+      fields.summary || '',
+      fields.filename,
+      uploadedAt
     ]
   });
 
@@ -97,15 +99,33 @@ export async function runAppendSheetRow(opts: {
 
 export async function runWorkflow(
   type: WorkflowType,
-  opts: { accessToken: string; receipt: Receipt; settings: Settings }
+  opts: {
+    accessToken: string;
+    fileBuffer: Buffer | null;
+    fields: ReceiptFields;
+    settings: Settings;
+    uploadedAt: string;
+  }
 ): Promise<{ result: string }> {
   switch (type) {
     case 'rename_upload_drive':
-      return runRenameUploadDrive(opts);
+      if (!opts.fileBuffer) {
+        throw new Error('Original file is no longer available in this browser session — re-upload the receipt to run this workflow.');
+      }
+      return runRenameUploadDrive({
+        accessToken: opts.accessToken,
+        fileBuffer: opts.fileBuffer,
+        fields: opts.fields,
+        settings: opts.settings
+      });
     case 'append_sheet_row':
-      return runAppendSheetRow(opts);
+      return runAppendSheetRow({
+        accessToken: opts.accessToken,
+        fields: opts.fields,
+        settings: opts.settings,
+        uploadedAt: opts.uploadedAt
+      });
     default:
       throw new Error(`Unknown workflow type: ${type}`);
   }
 }
-
