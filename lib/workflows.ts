@@ -1,6 +1,6 @@
 import type { ReceiptFields, Settings, WorkflowType } from './types';
 import { inspectSheetTab, uploadFileToDrive, writeSheetRow } from './google';
-import { buildFilename } from './filename';
+import { buildFilename, normalizeFilename } from './filename';
 import { planSheetRow, planToRowValues, receiptFieldValues } from './sheetMapping';
 export { WORKFLOW_LABELS } from './workflowLabels';
 export { buildFilename } from './filename';
@@ -10,13 +10,16 @@ export async function runRenameUploadDrive(opts: {
   fileBuffer: Buffer;
   fields: ReceiptFields;
   settings: Settings;
+  /** Hand-edited name from the preview; falls back to the template when blank. */
+  filenameOverride?: string;
 }): Promise<{ result: string }> {
-  const { accessToken, fileBuffer, fields, settings } = opts;
+  const { accessToken, fileBuffer, fields, settings, filenameOverride } = opts;
   if (!settings.driveFolderId) {
-    throw new Error('No Google Drive folder configured. Set a Drive Folder ID in Settings.');
+    throw new Error('No Google Drive folder configured. Choose a destination folder in Settings.');
   }
 
-  const filename = buildFilename(settings.filenameTemplate, fields, settings.dateFormat);
+  const overridden = filenameOverride ? normalizeFilename(filenameOverride, fields.filename) : '';
+  const filename = overridden || buildFilename(settings.filenameTemplate, fields, settings.dateFormat);
   const { fileId, webViewLink } = await uploadFileToDrive({
     accessToken,
     fileBuffer,
@@ -35,8 +38,10 @@ export async function runAppendSheetRow(opts: {
   fields: ReceiptFields;
   settings: Settings;
   uploadedAt: string;
+  /** Per-column edits from the preview, keyed by column letter; these win over derived values. */
+  columnOverrides?: Record<string, string>;
 }): Promise<{ result: string }> {
-  const { accessToken, fields, settings, uploadedAt } = opts;
+  const { accessToken, fields, settings, uploadedAt, columnOverrides } = opts;
   if (!settings.sheetId) {
     throw new Error('No Google Sheet configured. Set a Sheet ID in Settings.');
   }
@@ -46,11 +51,20 @@ export async function runAppendSheetRow(opts: {
   const { headers, nextRow } = await inspectSheetTab({
     accessToken,
     spreadsheetId: settings.sheetId,
-    tabName
+    tabName,
+    headerRow: settings.headerRow
   });
 
   const values = receiptFieldValues(fields, uploadedAt, settings.dateFormat);
   const plan = planSheetRow(headers, values);
+
+  if (columnOverrides) {
+    for (const column of plan.columns) {
+      if (Object.prototype.hasOwnProperty.call(columnOverrides, column.columnLetter)) {
+        column.value = columnOverrides[column.columnLetter];
+      }
+    }
+  }
 
   await writeSheetRow({
     accessToken,
@@ -58,7 +72,8 @@ export async function runAppendSheetRow(opts: {
     tabName,
     rowNumber: nextRow,
     values: planToRowValues(plan),
-    header: plan.createdHeader ? plan.columns.map((c) => c.header) : undefined
+    header: plan.createdHeader ? plan.columns.map((c) => c.header) : undefined,
+    headerRow: settings.headerRow
   });
 
   const written = plan.columns
@@ -83,6 +98,8 @@ export async function runWorkflow(
     fields: ReceiptFields;
     settings: Settings;
     uploadedAt: string;
+    columnOverrides?: Record<string, string>;
+    filenameOverride?: string;
   }
 ): Promise<{ result: string }> {
   switch (type) {
@@ -94,14 +111,16 @@ export async function runWorkflow(
         accessToken: opts.accessToken,
         fileBuffer: opts.fileBuffer,
         fields: opts.fields,
-        settings: opts.settings
+        settings: opts.settings,
+        filenameOverride: opts.filenameOverride
       });
     case 'append_sheet_row':
       return runAppendSheetRow({
         accessToken: opts.accessToken,
         fields: opts.fields,
         settings: opts.settings,
-        uploadedAt: opts.uploadedAt
+        uploadedAt: opts.uploadedAt,
+        columnOverrides: opts.columnOverrides
       });
     default:
       throw new Error(`Unknown workflow type: ${type}`);

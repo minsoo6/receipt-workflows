@@ -160,19 +160,31 @@ for multipart overhead. This is enforced in both `/api/extract` and
      blank rows in the middle of the sheet never cause a row to land in the
      wrong place. If the tab is completely empty, a header row is written
      first.
+   - **Header row** — a grid of the tab's first 10 rows lets you click the row
+     that holds your column names, so sheets with a title row or blank rows
+     above the headers work fine. Receipts are always added below the last row
+     with content, never on or above the header row.
    - Columns are matched to your sheet's **existing header names** — a sheet
      with `Merchant` / `Total` / `Notes` gets the vendor, amount, and summary
      in the right places, and columns the app doesn't recognize are left
      untouched. Before running, a preview shows the target row and exactly
-     what value lands in each column.
+     what value lands in each column — and **each value is editable**, so you
+     can adjust what gets written without changing the extracted receipt
+     details.
 3. **Drop a receipt** (JPEG/PNG/WebP/GIF/PDF, up to 4MB). Claude extracts
    vendor, date, amount, currency, category, and a summary automatically.
 4. **Review/edit** the extracted fields under "Edit details & run workflows"
    if anything needs correcting — edits save to this browser as you tab away
    from a field.
 5. **Check the workflows** you want to run (rename+upload, sheet row, or
-   both) and click **Run selected workflows**. Results (success or error, with
-   details) show up in the run log under the receipt.
+   both). A preview appears showing exactly what will happen, and everything
+   in it is editable: the Drive **file name** and each **column value**. Edits
+   apply to that one run without changing the extracted receipt details, and
+   a reset link restores the derived values. An edited filename is cleaned of
+   illegal characters and keeps the original extension.
+6. Click **Run selected workflows**. Results (success or error, with details
+   including the name used and the exact per-column values written) show up in
+   the run log under the receipt.
 
 ## Notes / limitations
 

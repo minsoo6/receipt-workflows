@@ -129,21 +129,24 @@ function quoteTabName(tabName: string): string {
 }
 
 /**
- * Reads the tab's header row and figures out where the next row goes.
+ * Reads column names from `headerRow` and figures out where the next row goes.
  *
  * The target row is computed from the used range rather than via values.append:
  * append resolves the "table" containing its range, so a blank row anywhere in
  * the sheet makes it stop early and write into the middle. values.get trims
  * trailing empty rows, so the row count is the last row with content and
- * lastRow + 1 is always the true bottom.
+ * lastRow + 1 is always the true bottom — floored at headerRow + 1 so a row
+ * can never land on or above the headers.
  */
 export async function inspectSheetTab(opts: {
   accessToken: string;
   spreadsheetId: string;
   tabName: string;
+  headerRow: number;
 }): Promise<{ headers: string[]; nextRow: number }> {
   const sheets = sheetsClient(opts.accessToken);
   const tab = quoteTabName(opts.tabName);
+  const headerRow = Math.max(1, Math.floor(opts.headerRow || 1));
 
   const existing = await sheets.spreadsheets.values.get({
     spreadsheetId: opts.spreadsheetId,
@@ -151,12 +154,44 @@ export async function inspectSheetTab(opts: {
   });
 
   const rows = existing.data.values ?? [];
-  const headers = (rows[0] ?? []).map((cell: unknown) => String(cell ?? ''));
+  const headers = (rows[headerRow - 1] ?? []).map((cell: unknown) => String(cell ?? ''));
 
   return {
     headers: headers.some((h) => h.trim() !== '') ? headers : [],
-    nextRow: rows.length === 0 ? 2 : rows.length + 1
+    nextRow: Math.max(rows.length + 1, headerRow + 1)
   };
+}
+
+/**
+ * Returns the tab's first rows as a padded grid so the UI can show them with
+ * stable row/column positions and let the user click the header row.
+ */
+export async function readTopRows(opts: {
+  accessToken: string;
+  spreadsheetId: string;
+  tabName: string;
+  limit?: number;
+}): Promise<string[][]> {
+  const sheets = sheetsClient(opts.accessToken);
+  const tab = quoteTabName(opts.tabName);
+  const limit = opts.limit ?? 10;
+
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: opts.spreadsheetId,
+    range: `${tab}!A1:Z${limit}`
+  });
+
+  const rows = (res.data.values ?? []).map((row: unknown[]) =>
+    row.map((cell) => String(cell ?? ''))
+  );
+
+  // values.get drops trailing empties, so pad to a rectangle — otherwise a
+  // short row would shift the columns the user is trying to line up.
+  const width = Math.max(1, ...rows.map((row) => row.length));
+  return Array.from({ length: limit }, (_, i) => {
+    const row = rows[i] ?? [];
+    return Array.from({ length: width }, (_, j) => row[j] ?? '');
+  });
 }
 
 export async function writeSheetRow(opts: {
@@ -166,6 +201,7 @@ export async function writeSheetRow(opts: {
   rowNumber: number;
   values: (string | number)[];
   header?: string[];
+  headerRow?: number;
 }): Promise<void> {
   const sheets = sheetsClient(opts.accessToken);
   const tab = quoteTabName(opts.tabName);
@@ -173,7 +209,7 @@ export async function writeSheetRow(opts: {
   if (opts.header) {
     await sheets.spreadsheets.values.update({
       spreadsheetId: opts.spreadsheetId,
-      range: `${tab}!A1`,
+      range: `${tab}!A${Math.max(1, Math.floor(opts.headerRow || 1))}`,
       valueInputOption: 'USER_ENTERED',
       requestBody: { values: [opts.header] }
     });
