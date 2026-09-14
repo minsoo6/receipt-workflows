@@ -1,33 +1,9 @@
-import path from 'path';
 import type { ReceiptFields, Settings, WorkflowType } from './types';
-import { appendRowToSheet, ensureSheetHeaderRow, uploadFileToDrive } from './google';
+import { inspectSheetTab, uploadFileToDrive, writeSheetRow } from './google';
+import { buildFilename } from './filename';
+import { planSheetRow, planToRowValues, receiptFieldValues } from './sheetMapping';
 export { WORKFLOW_LABELS } from './workflowLabels';
-
-function sanitizeForFilename(value: string): string {
-  return value
-    .trim()
-    .replace(/[/\\?%*:|"<>]/g, '-')
-    .replace(/\s+/g, '_')
-    .slice(0, 80);
-}
-
-export function buildFilename(template: string, fields: ReceiptFields): string {
-  const ext = path.extname(fields.filename) || '';
-  const vendor = sanitizeForFilename(fields.vendor || 'unknown-vendor');
-  const date = fields.receiptDate || 'unknown-date';
-  const amount = fields.amount != null ? fields.amount.toFixed(2) : 'unknown-amount';
-  const currency = fields.currency || '';
-
-  const name = template
-    .replace('{vendor}', vendor)
-    .replace('{date}', date)
-    .replace('{amount}', amount)
-    .replace('{currency}', currency)
-    .replace('{original}', path.basename(fields.filename, ext));
-
-  const cleanName = sanitizeForFilename(name);
-  return cleanName.toLowerCase().endsWith(ext.toLowerCase()) ? cleanName : `${cleanName}${ext}`;
-}
+export { buildFilename } from './filename';
 
 export async function runRenameUploadDrive(opts: {
   accessToken: string;
@@ -40,7 +16,7 @@ export async function runRenameUploadDrive(opts: {
     throw new Error('No Google Drive folder configured. Set a Drive Folder ID in Settings.');
   }
 
-  const filename = buildFilename(settings.filenameTemplate, fields);
+  const filename = buildFilename(settings.filenameTemplate, fields, settings.dateFormat);
   const { fileId, webViewLink } = await uploadFileToDrive({
     accessToken,
     fileBuffer,
@@ -67,34 +43,36 @@ export async function runAppendSheetRow(opts: {
 
   const tabName = settings.sheetTabName || 'Receipts';
 
-  try {
-    await ensureSheetHeaderRow({
-      accessToken,
-      spreadsheetId: settings.sheetId,
-      tabName,
-      header: ['Date', 'Vendor', 'Amount', 'Currency', 'Category', 'Summary', 'Original Filename', 'Uploaded At']
-    });
-  } catch (err) {
-    // If the tab doesn't exist or header check fails, continue — append will still surface a clear error.
-  }
+  const { headers, nextRow } = await inspectSheetTab({
+    accessToken,
+    spreadsheetId: settings.sheetId,
+    tabName
+  });
 
-  await appendRowToSheet({
+  const values = receiptFieldValues(fields, uploadedAt, settings.dateFormat);
+  const plan = planSheetRow(headers, values);
+
+  await writeSheetRow({
     accessToken,
     spreadsheetId: settings.sheetId,
     tabName,
-    row: [
-      fields.receiptDate || '',
-      fields.vendor || '',
-      fields.amount ?? '',
-      fields.currency || '',
-      fields.category || '',
-      fields.summary || '',
-      fields.filename,
-      uploadedAt
-    ]
+    rowNumber: nextRow,
+    values: planToRowValues(plan),
+    header: plan.createdHeader ? plan.columns.map((c) => c.header) : undefined
   });
 
-  return { result: `Appended row to "${tabName}" tab` };
+  const written = plan.columns
+    .filter((c) => c.value !== '')
+    .map((c) => `${c.columnLetter} (${c.header}) = ${c.value}`)
+    .join(' · ');
+
+  const skipped = plan.unmapped.length
+    ? ` — no column matched: ${plan.unmapped.map((u) => u.label).join(', ')}`
+    : '';
+
+  return {
+    result: `Wrote row ${nextRow} of "${tabName}": ${written || '(no values matched any column)'}${skipped}`
+  };
 }
 
 export async function runWorkflow(

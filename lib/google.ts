@@ -13,6 +13,89 @@ function sheetsClient(accessToken: string) {
   return google.sheets({ version: 'v4', auth });
 }
 
+export const FOLDER_MIME = 'application/vnd.google-apps.folder';
+export const SPREADSHEET_MIME = 'application/vnd.google-apps.spreadsheet';
+
+export interface DriveItem {
+  id: string;
+  name: string;
+  modifiedTime: string | null;
+}
+
+// Drive query strings are single-quote delimited, so a quote in user input
+// would otherwise break out of the term.
+function escapeDriveQuery(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+/**
+ * Lists folders or spreadsheets. With a search term the whole Drive is
+ * searched; otherwise folders are listed as children of `parentId` so the
+ * picker can browse, and spreadsheets are listed most-recent-first.
+ */
+export async function listDriveItems(opts: {
+  accessToken: string;
+  mimeType: string;
+  parentId?: string;
+  search?: string;
+}): Promise<DriveItem[]> {
+  const drive = driveClient(opts.accessToken);
+  const search = opts.search?.trim();
+
+  const clauses = [`mimeType='${opts.mimeType}'`, 'trashed=false'];
+  if (search) {
+    clauses.push(`name contains '${escapeDriveQuery(search)}'`);
+  } else if (opts.mimeType === FOLDER_MIME) {
+    clauses.push(`'${escapeDriveQuery(opts.parentId || 'root')}' in parents`);
+  }
+
+  const res = await drive.files.list({
+    q: clauses.join(' and '),
+    fields: 'files(id, name, modifiedTime)',
+    orderBy: opts.mimeType === FOLDER_MIME && !search ? 'name' : 'modifiedTime desc',
+    pageSize: 100,
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true
+  });
+
+  return (res.data.files ?? []).map((file) => ({
+    id: file.id!,
+    name: file.name ?? '(untitled)',
+    modifiedTime: file.modifiedTime ?? null
+  }));
+}
+
+export async function getDriveItemName(opts: {
+  accessToken: string;
+  fileId: string;
+}): Promise<string | null> {
+  const drive = driveClient(opts.accessToken);
+  try {
+    const res = await drive.files.get({
+      fileId: opts.fileId,
+      fields: 'name',
+      supportsAllDrives: true
+    });
+    return res.data.name ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function listSheetTabs(opts: {
+  accessToken: string;
+  spreadsheetId: string;
+}): Promise<string[]> {
+  const sheets = sheetsClient(opts.accessToken);
+  const res = await sheets.spreadsheets.get({
+    spreadsheetId: opts.spreadsheetId,
+    fields: 'sheets(properties(title))'
+  });
+  return (res.data.sheets ?? [])
+    .map((sheet) => sheet.properties?.title)
+    .filter((title): title is string => Boolean(title));
+}
+
 export async function uploadFileToDrive(opts: {
   accessToken: string;
   fileBuffer: Buffer;
@@ -39,42 +122,67 @@ export async function uploadFileToDrive(opts: {
   };
 }
 
-export async function appendRowToSheet(opts: {
-  accessToken: string;
-  spreadsheetId: string;
-  tabName: string;
-  row: (string | number)[];
-}): Promise<void> {
-  const sheets = sheetsClient(opts.accessToken);
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: opts.spreadsheetId,
-    range: `${opts.tabName}!A1`,
-    valueInputOption: 'USER_ENTERED',
-    insertDataOption: 'INSERT_ROWS',
-    requestBody: {
-      values: [opts.row]
-    }
-  });
+// A1 notation requires single-quoting tab names containing spaces or punctuation,
+// with any internal apostrophe doubled.
+function quoteTabName(tabName: string): string {
+  return `'${tabName.replace(/'/g, "''")}'`;
 }
 
-export async function ensureSheetHeaderRow(opts: {
+/**
+ * Reads the tab's header row and figures out where the next row goes.
+ *
+ * The target row is computed from the used range rather than via values.append:
+ * append resolves the "table" containing its range, so a blank row anywhere in
+ * the sheet makes it stop early and write into the middle. values.get trims
+ * trailing empty rows, so the row count is the last row with content and
+ * lastRow + 1 is always the true bottom.
+ */
+export async function inspectSheetTab(opts: {
   accessToken: string;
   spreadsheetId: string;
   tabName: string;
-  header: string[];
-}): Promise<void> {
+}): Promise<{ headers: string[]; nextRow: number }> {
   const sheets = sheetsClient(opts.accessToken);
+  const tab = quoteTabName(opts.tabName);
+
   const existing = await sheets.spreadsheets.values.get({
     spreadsheetId: opts.spreadsheetId,
-    range: `${opts.tabName}!A1:Z1`
+    range: `${tab}!A:Z`
   });
 
-  if (!existing.data.values || existing.data.values.length === 0) {
+  const rows = existing.data.values ?? [];
+  const headers = (rows[0] ?? []).map((cell: unknown) => String(cell ?? ''));
+
+  return {
+    headers: headers.some((h) => h.trim() !== '') ? headers : [],
+    nextRow: rows.length === 0 ? 2 : rows.length + 1
+  };
+}
+
+export async function writeSheetRow(opts: {
+  accessToken: string;
+  spreadsheetId: string;
+  tabName: string;
+  rowNumber: number;
+  values: (string | number)[];
+  header?: string[];
+}): Promise<void> {
+  const sheets = sheetsClient(opts.accessToken);
+  const tab = quoteTabName(opts.tabName);
+
+  if (opts.header) {
     await sheets.spreadsheets.values.update({
       spreadsheetId: opts.spreadsheetId,
-      range: `${opts.tabName}!A1`,
+      range: `${tab}!A1`,
       valueInputOption: 'USER_ENTERED',
       requestBody: { values: [opts.header] }
     });
   }
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: opts.spreadsheetId,
+    range: `${tab}!A${opts.rowNumber}`,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values: [opts.values] }
+  });
 }
