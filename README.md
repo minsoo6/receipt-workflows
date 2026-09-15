@@ -166,8 +166,14 @@ for multipart overhead. This is enforced in both `/api/extract` and
      with content, never on or above the header row.
    - Columns are matched to your sheet's **existing header names** — a sheet
      with `Merchant` / `Total` / `Notes` gets the vendor, amount, and summary
-     in the right places, and columns the app doesn't recognize are left
-     untouched. Before running, a preview shows the target row and exactly
+     in the right places.
+   - Columns that match no receipt field are **guessed** from the receipt plus
+     the last few rows already in your sheet, so a `Month` column gets
+     `August`, and a column where every existing row says `No` gets `No`.
+     Guesses are tagged in the preview so you can tell them from matched
+     values, and the model is told to leave a column blank rather than invent
+     something it can't support. This costs one extra API call, so it runs on
+     the first preview for a receipt and then only via "Suggest again". Before running, a preview shows the target row and exactly
      what value lands in each column — and **each value is editable**, so you
      can adjust what gets written without changing the extracted receipt
      details.

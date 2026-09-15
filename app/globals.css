@@ -455,6 +455,24 @@ button {
   border-color: #e0cfa0;
 }
 
+.preview-input-guessed {
+  background: #eef4fb;
+  border-color: #c3d6ea;
+}
+
+.guess-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #e3edf8;
+  color: #2c5b8a;
+  font-size: 10px;
+  font-weight: 600;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 .link-button {
   background: none;
   border: none;
@@ -469,6 +487,13 @@ button {
   grid-template-columns: 1fr 1fr;
   gap: 14px;
   margin-top: 12px;
+}
+
+/* Grid items default to min-width:auto, so a wide child (the header-row table)
+   would size its track to the table's intrinsic width and push the whole card
+   sideways — and the child's own overflow-x:auto would never engage. */
+.settings-grid > * {
+  min-width: 0;
 }
 
 .settings-grid .full {
@@ -668,6 +693,18 @@ button {
   margin-top: 4px;
 }
 
+.date-presets {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.date-presets .btn-secondary {
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
 .empty-state {
   text-align: center;
   color: var(--text-muted);
@@ -722,10 +759,134 @@ button {
 }
 
 @media (max-width: 600px) {
+  .container {
+    padding: 20px 16px 60px;
+  }
+
   .settings-grid {
     grid-template-columns: 1fr;
   }
+
   .receipt-card {
     flex-direction: column;
+  }
+
+  /* iOS Safari zooms the page in when a focused field is under 16px and never
+     zooms back out, so every text control goes to 16px on small screens. */
+  input,
+  select,
+  textarea,
+  .settings-grid input,
+  .settings-grid select,
+  .field-grid input,
+  .field-grid select,
+  .picker-search,
+  .preview-input,
+  .preview-filename {
+    font-size: 16px;
+  }
+
+  /* Comfortable tap targets — the desktop sizes land around 20-34px. */
+  .btn,
+  .btn-secondary,
+  .chooser-btn {
+    min-height: 44px;
+    padding: 10px 16px;
+  }
+
+  .btn-danger {
+    min-height: 40px;
+    padding: 8px 12px;
+  }
+
+  .settings-grid input,
+  .settings-grid select,
+  .chooser-value {
+    min-height: 44px;
+  }
+
+  .workflow-checkbox {
+    min-height: 44px;
+    flex: 1 1 100%;
+  }
+
+  .workflow-checkbox input[type='checkbox'] {
+    width: 20px;
+    height: 20px;
+  }
+
+  .workflow-row .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Date-format presets are 20px tall on desktop — too small to hit reliably. */
+  .date-presets .btn-secondary {
+    min-height: 40px;
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .receipt-top-row {
+    flex-wrap: wrap;
+  }
+
+  .preview-input {
+    min-width: 0;
+  }
+
+  .headerrow-table td,
+  .preview-table td,
+  .preview-table th {
+    padding: 10px 8px;
+  }
+
+  .headerrow-table td.headerrow-num {
+    width: 74px;
+    min-width: 74px;
+    max-width: 74px;
+  }
+
+  .headerrow-table td.headerrow-num input[type='radio'] {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* A centered dialog gets cramped and can trap content off-screen on a phone;
+     a bottom sheet keeps the list and the action row reachable one-handed. */
+  .picker-backdrop {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .picker-modal {
+    max-width: none;
+    max-height: 88vh;
+    border-radius: 14px 14px 0 0;
+  }
+
+  .picker-item {
+    min-height: 48px;
+  }
+
+  .picker-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .picker-footer > div {
+    display: flex;
+    gap: 8px;
+  }
+
+  .picker-footer .btn,
+  .picker-footer .btn-secondary {
+    flex: 1;
+    justify-content: center;
   }
 }

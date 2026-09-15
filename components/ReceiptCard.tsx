@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReceiptFields, ReceiptRecord, Settings, WorkflowRun, WorkflowType } from '@/lib/types';
 import { WORKFLOW_LABELS } from '@/lib/workflowLabels';
 import { buildFilename, normalizeFilename } from '@/lib/filename';
@@ -13,6 +13,7 @@ interface SheetPreview {
   createdHeader: boolean;
   columns: { columnLetter: string; header: string; field: string | null; value: string }[];
   unmapped: { field: string; label: string; value: string }[];
+  guesses?: Record<string, string>;
 }
 
 function formatBytes(bytes: number): string {
@@ -50,10 +51,19 @@ export default function ReceiptCard({
   const [sheetPreview, setSheetPreview] = useState<SheetPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [guessing, setGuessing] = useState(false);
   // Manual per-column edits, keyed by column letter. These win over the values
   // derived from the receipt until explicitly reset.
   const [columnEdits, setColumnEdits] = useState<Record<string, string>>({});
   const [filenameEdit, setFilenameEdit] = useState<string | null>(null);
+  // Values inferred from the sheet's existing rows for columns that matched no
+  // receipt field. Kept separate from columnEdits so a manual edit still wins
+  // and "reset" doesn't discard them.
+  const [guesses, setGuesses] = useState<Record<string, string>>({});
+  // Guessing costs an API call, so it runs on the first preview for this
+  // receipt and then only when asked, not on every debounced field edit.
+  const guessedOnceRef = useRef(false);
+  const [reguessToken, setReguessToken] = useState(0);
 
   const isImage = receipt.mimeType.startsWith('image/');
   const objectUrl = useMemo(() => {
@@ -130,8 +140,10 @@ export default function ReceiptCard({
     }
 
     let cancelled = false;
+    const wantGuesses = !guessedOnceRef.current || reguessToken > 0;
     setPreviewLoading(true);
     setPreviewError(null);
+    if (wantGuesses) setGuessing(true);
 
     const timer = setTimeout(async () => {
       try {
@@ -141,19 +153,27 @@ export default function ReceiptCard({
           body: JSON.stringify({
             fields: receiptFields,
             settings,
-            uploadedAt: receipt.uploadedAt
+            uploadedAt: receipt.uploadedAt,
+            includeGuesses: wantGuesses
           })
         });
         const data = await res.json();
         if (cancelled) return;
         if (!res.ok) throw new Error(data.error || 'Could not read the sheet');
         setSheetPreview(data as SheetPreview);
+        if (wantGuesses) {
+          guessedOnceRef.current = true;
+          setGuesses(data.guesses ?? {});
+        }
       } catch (err: any) {
         if (cancelled) return;
         setSheetPreview(null);
         setPreviewError(err.message || 'Could not read the sheet');
       } finally {
-        if (!cancelled) setPreviewLoading(false);
+        if (!cancelled) {
+          setPreviewLoading(false);
+          setGuessing(false);
+        }
       }
     }, 400);
 
@@ -162,7 +182,7 @@ export default function ReceiptCard({
       clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sheetSelected, previewKey]);
+  }, [sheetSelected, previewKey, reguessToken]);
 
   const runWorkflows = async () => {
     if (selected.size === 0) return;
@@ -186,8 +206,12 @@ export default function ReceiptCard({
       formData.append('settings', JSON.stringify(settings));
       formData.append('workflowTypes', JSON.stringify(Array.from(selected)));
       formData.append('uploadedAt', receipt.uploadedAt);
-      if (Object.keys(columnEdits).length > 0) {
-        formData.append('columnOverrides', JSON.stringify(columnEdits));
+      // Guesses only exist in the preview — the write path re-plans from the
+      // sheet's headers and would leave those columns blank, so they travel as
+      // overrides too. Manual edits are layered last and win.
+      const overrides = { ...guesses, ...columnEdits };
+      if (Object.keys(overrides).length > 0) {
+        formData.append('columnOverrides', JSON.stringify(overrides));
       }
       if (filenameEdit !== null) {
         formData.append('filenameOverride', filenameEdit);
@@ -361,14 +385,23 @@ export default function ReceiptCard({
                                   columnEdits,
                                   column.columnLetter
                                 );
-                                const value = edited ? columnEdits[column.columnLetter] : column.value;
+                                const guess = guesses[column.columnLetter];
+                                const guessed = !edited && !column.value && Boolean(guess);
+                                const value = edited
+                                  ? columnEdits[column.columnLetter]
+                                  : column.value || guess || '';
                                 return (
                                   <tr key={column.columnLetter}>
                                     <td className="preview-col-letter">{column.columnLetter}</td>
-                                    <td>{column.header || <em>(no header)</em>}</td>
+                                    <td>
+                                      {column.header || <em>(no header)</em>}
+                                      {guessed && <span className="guess-tag">guessed</span>}
+                                    </td>
                                     <td>
                                       <input
-                                        className={`preview-input ${edited ? 'preview-input-edited' : ''}`}
+                                        className={`preview-input ${edited ? 'preview-input-edited' : ''} ${
+                                          guessed ? 'preview-input-guessed' : ''
+                                        }`}
                                         value={value}
                                         placeholder="left blank"
                                         onChange={(e) =>
@@ -386,14 +419,30 @@ export default function ReceiptCard({
                           </table>
                         </div>
 
-                        {Object.keys(columnEdits).length > 0 && (
-                          <div className="hint" style={{ marginTop: 6 }}>
-                            Edited values are written as typed.{' '}
-                            <button className="link-button" onClick={() => setColumnEdits({})}>
-                              Reset to extracted values
+                        <div className="hint" style={{ marginTop: 6 }}>
+                          {guessing && <>Guessing values for unmatched columns… </>}
+                          {!guessing && Object.keys(guesses).length > 0 && (
+                            <>
+                              Values marked <span className="guess-tag">guessed</span> were inferred
+                              from this sheet&apos;s existing rows — check them.{' '}
+                            </>
+                          )}
+                          {Object.keys(columnEdits).length > 0 && (
+                            <>
+                              <button className="link-button" onClick={() => setColumnEdits({})}>
+                                Reset my edits
+                              </button>{' '}
+                            </>
+                          )}
+                          {!guessing && (
+                            <button
+                              className="link-button"
+                              onClick={() => setReguessToken((t) => t + 1)}
+                            >
+                              Suggest again
                             </button>
-                          </div>
-                        )}
+                          )}
+                        </div>
 
                         {sheetPreview.unmapped.length > 0 && (
                           <div className="hint" style={{ marginTop: 6, color: 'var(--danger)' }}>

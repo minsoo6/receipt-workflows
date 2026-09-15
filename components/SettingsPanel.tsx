@@ -110,13 +110,12 @@ export default function SettingsPanel({
           <div className="hint">
             Tokens: YYYY YY MMMM MMM MM M DD D — everything else is kept literally
           </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+          <div className="date-presets">
             {DATE_FORMAT_PRESETS.map((preset) => (
               <button
                 key={preset}
                 type="button"
                 className="btn-secondary"
-                style={{ fontSize: 11, padding: '3px 8px' }}
                 onClick={() => {
                   setForm((f) => ({ ...f, dateFormat: preset }));
                   setSaved(false);
