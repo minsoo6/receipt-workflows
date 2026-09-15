@@ -131,7 +131,7 @@ export async function guessColumnValues(opts: {
     `date: ${opts.fields.receiptDate ?? '(unknown)'}`,
     `amount: ${opts.fields.amount ?? '(unknown)'}`,
     `currency: ${opts.fields.currency ?? '(unknown)'}`,
-    `category: ${opts.fields.category ?? '(unknown)'}`,
+    `category read off the receipt: ${opts.fields.category ?? '(unknown)'} — a generic guess, not this sheet's wording; translate it into whatever vocabulary the existing rows use`,
     `summary: ${opts.fields.summary ?? '(unknown)'}`,
     `original filename: ${opts.fields.filename}`
   ].join('\n');

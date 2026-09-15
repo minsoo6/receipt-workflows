@@ -1,12 +1,19 @@
 import type { ReceiptFields } from './types';
 import { formatDate } from './dateFormat';
 
+/**
+ * Receipt fields that can fill a column directly by matching its header name.
+ *
+ * Category is deliberately NOT here: every sheet uses its own category
+ * vocabulary, and a generic label read off the receipt ("Restaurant") rarely
+ * matches it. Leaving the column unmatched routes it through the guesser,
+ * which picks a value consistent with the rows already in that sheet.
+ */
 export type ReceiptField =
   | 'date'
   | 'vendor'
   | 'amount'
   | 'currency'
-  | 'category'
   | 'summary'
   | 'filename'
   | 'uploadedAt';
@@ -16,7 +23,6 @@ export const FIELD_LABELS: Record<ReceiptField, string> = {
   vendor: 'Vendor',
   amount: 'Amount',
   currency: 'Currency',
-  category: 'Category',
   summary: 'Summary',
   filename: 'Original Filename',
   uploadedAt: 'Uploaded At'
@@ -30,7 +36,6 @@ const FIELD_ALIASES: Record<ReceiptField, string[]> = {
   vendor: ['vendor', 'merchant', 'store', 'payee', 'seller', 'supplier', 'company'],
   amount: ['amount', 'total', 'price', 'cost', 'subtotal', 'amountpaid'],
   currency: ['currency', 'ccy'],
-  category: ['category', 'expensetype', 'expensecategory'],
   summary: ['summary', 'notes', 'note', 'description', 'memo', 'details', 'item', 'items'],
   filename: ['filename', 'file', 'originalfilename', 'attachment', 'receiptfile'],
   uploadedAt: ['uploadedat', 'timestamp', 'createdat', 'loggedat', 'dateadded', 'addedat']
@@ -41,16 +46,20 @@ for (const [field, aliases] of Object.entries(FIELD_ALIASES) as [ReceiptField, s
   for (const alias of aliases) HEADER_TO_FIELD[alias] = field;
 }
 
-/** The column order used when creating a header row in an empty tab. */
-export const DEFAULT_HEADERS: ReceiptField[] = [
-  'date',
-  'vendor',
-  'amount',
-  'currency',
-  'category',
-  'summary',
-  'filename',
-  'uploadedAt'
+/**
+ * Header labels written when creating a header row in an empty tab. Plain
+ * labels rather than field keys, so a column can exist here (Category) without
+ * being directly fillable — it gets guessed like any other unmatched column.
+ */
+export const DEFAULT_HEADERS: string[] = [
+  'Date',
+  'Vendor',
+  'Amount',
+  'Currency',
+  'Category',
+  'Summary',
+  'Original Filename',
+  'Uploaded At'
 ];
 
 function normalizeHeader(header: string): string {
@@ -78,7 +87,6 @@ export function receiptFieldValues(
     vendor: fields.vendor || '',
     amount: fields.amount != null ? String(fields.amount) : '',
     currency: fields.currency || '',
-    category: fields.category || '',
     summary: fields.summary || '',
     filename: fields.filename,
     uploadedAt
@@ -109,7 +117,7 @@ export function planSheetRow(
   values: Record<ReceiptField, string>
 ): SheetRowPlan {
   const effectiveHeaders =
-    headers.length > 0 ? headers : DEFAULT_HEADERS.map((f) => FIELD_LABELS[f]);
+    headers.length > 0 ? headers : DEFAULT_HEADERS;
   const createdHeader = headers.length === 0;
 
   const used = new Set<ReceiptField>();

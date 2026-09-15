@@ -170,6 +170,10 @@ for multipart overhead. This is enforced in both `/api/extract` and
    - Columns that match no receipt field are **guessed** from the receipt plus
      the last few rows already in your sheet, so a `Month` column gets
      `August`, and a column where every existing row says `No` gets `No`.
+     **Category is always guessed** rather than matched: every sheet uses its
+     own category vocabulary, so a generic label read off the receipt
+     ("Restaurant") rarely fits. The receipt's reading is passed to the
+     guesser as a hint to translate into whatever wording your rows use.
      Guesses are tagged in the preview so you can tell them from matched
      values, and the model is told to leave a column blank rather than invent
      something it can't support. This costs one extra API call, so it runs on
@@ -179,9 +183,10 @@ for multipart overhead. This is enforced in both `/api/extract` and
      details.
 3. **Drop a receipt** (JPEG/PNG/WebP/GIF/PDF, up to 4MB). Claude extracts
    vendor, date, amount, currency, category, and a summary automatically.
-4. **Review/edit** the extracted fields under "Edit details & run workflows"
-   if anything needs correcting — edits save to this browser as you tab away
-   from a field.
+4. **Review/edit** the extracted fields (vendor, date, amount, currency) under
+   "Edit details & run workflows" if anything needs correcting — edits save to
+   this browser as you tab away from a field. Category isn't edited here; it's
+   guessed per-sheet in the preview and editable there.
 5. **Check the workflows** you want to run (rename+upload, sheet row, or
    both). A preview appears showing exactly what will happen, and everything
    in it is editable: the Drive **file name** and each **column value**. Edits

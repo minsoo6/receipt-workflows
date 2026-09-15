@@ -37,12 +37,13 @@ export default function ReceiptCard({
   onRuns: (id: string, runs: WorkflowRun[]) => void;
   onDelete: (id: string) => void;
 }) {
+  // Category isn't edited here — it's guessed per-sheet in the preview, where
+  // it can follow that sheet's own category vocabulary.
   const [fields, setFields] = useState({
     vendor: receipt.vendor ?? '',
     receiptDate: receipt.receiptDate ?? '',
     amount: receipt.amount != null ? String(receipt.amount) : '',
-    currency: receipt.currency ?? '',
-    category: receipt.category ?? ''
+    currency: receipt.currency ?? ''
   });
   const [selected, setSelected] = useState<Set<WorkflowType>>(new Set());
   const [running, setRunning] = useState(false);
@@ -86,8 +87,7 @@ export default function ReceiptCard({
       vendor: fields.vendor || null,
       receiptDate: fields.receiptDate || null,
       amount: fields.amount ? Number(fields.amount) : null,
-      currency: fields.currency || null,
-      category: fields.category || null
+      currency: fields.currency || null
     }),
     [fields]
   );
@@ -97,9 +97,12 @@ export default function ReceiptCard({
       filename: receipt.filename,
       mimeType: receipt.mimeType,
       summary: receipt.summary,
+      // Still carried so the guesser can use it as a hint, even though it no
+      // longer fills a column on its own.
+      category: receipt.category,
       ...currentFieldValues()
     }),
-    [receipt.filename, receipt.mimeType, receipt.summary, currentFieldValues]
+    [receipt.filename, receipt.mimeType, receipt.summary, receipt.category, currentFieldValues]
   );
 
   const saveFields = () => {
@@ -289,10 +292,6 @@ export default function ReceiptCard({
               <div>
                 <label>Currency</label>
                 <input value={fields.currency} onChange={updateField('currency')} onBlur={saveFields} placeholder="USD" />
-              </div>
-              <div>
-                <label>Category</label>
-                <input value={fields.category} onChange={updateField('category')} onBlur={saveFields} />
               </div>
             </div>
 
