@@ -77,15 +77,27 @@ export function columnLetter(index: number): string {
   return letters;
 }
 
+/**
+ * A receipt is money out, so a ledger usually wants it negative. Uses
+ * -Math.abs rather than negation so an amount already read as negative isn't
+ * flipped back to positive; zero has no sign to apply.
+ */
+function amountForSheet(amount: number | null, negative: boolean): string {
+  if (amount == null) return '';
+  if (!negative || amount === 0) return String(amount);
+  return String(-Math.abs(amount));
+}
+
 export function receiptFieldValues(
   fields: ReceiptFields,
   uploadedAt: string,
-  dateFormat: string
+  dateFormat: string,
+  negativeAmounts: boolean
 ): Record<ReceiptField, string> {
   return {
     date: fields.receiptDate ? formatDate(fields.receiptDate, dateFormat) : '',
     vendor: fields.vendor || '',
-    amount: fields.amount != null ? String(fields.amount) : '',
+    amount: amountForSheet(fields.amount, negativeAmounts),
     currency: fields.currency || '',
     summary: fields.summary || '',
     filename: fields.filename,

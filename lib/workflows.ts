@@ -55,7 +55,7 @@ export async function runAppendSheetRow(opts: {
     headerRow: settings.headerRow
   });
 
-  const values = receiptFieldValues(fields, uploadedAt, settings.dateFormat);
+  const values = receiptFieldValues(fields, uploadedAt, settings.dateFormat, settings.negativeAmounts);
   const plan = planSheetRow(headers, values);
 
   if (columnOverrides) {

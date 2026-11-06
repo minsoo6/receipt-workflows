@@ -160,6 +160,11 @@ for multipart overhead. This is enforced in both `/api/extract` and
      blank rows in the middle of the sheet never cause a row to land in the
      wrong place. If the tab is completely empty, a header row is written
      first.
+   - **Write amounts as negative numbers** (on by default) — a receipt is
+     money out, so the sheet gets `-24.99` rather than `24.99`. Affects the
+     sheet only; the filename's `{amount}` token keeps the plain figure, and
+     the Amount field on the receipt still shows its face value. An amount
+     already read as negative isn't flipped back positive.
    - **Header row** — a grid of the tab's first 10 rows lets you click the row
      that holds your column names, so sheets with a title row or blank rows
      above the headers work fine. Receipts are always added below the last row

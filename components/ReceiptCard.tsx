@@ -128,11 +128,15 @@ export default function ReceiptCard({
 
   // Keyed on the serialized inputs so edits refresh the preview, but a re-render
   // that changes nothing doesn't re-hit the Sheets API.
+  // Every setting the planned row depends on. Leaving one out means changing
+  // it in Settings silently leaves a stale preview on screen.
   const previewKey = JSON.stringify([
     receiptFields,
     settings.sheetId,
     settings.sheetTabName,
-    settings.dateFormat
+    settings.dateFormat,
+    settings.headerRow,
+    settings.negativeAmounts
   ]);
 
   useEffect(() => {

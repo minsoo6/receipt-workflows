@@ -197,6 +197,23 @@ export default function SettingsPanel({
           </div>
         </div>
         <div className="full">
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={form.negativeAmounts}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, negativeAmounts: e.target.checked }));
+                setSaved(false);
+              }}
+            />
+            Write amounts as negative numbers
+          </label>
+          <div className="hint">
+            A receipt is money out, so a ledger usually wants {'−'}24.99 rather than 24.99.
+            Affects the sheet only — the filename keeps the plain amount.
+          </div>
+        </div>
+        <div className="full">
           <label>Header row — which row holds your column names</label>
           <HeaderRowPicker
             sheetId={form.sheetId}
