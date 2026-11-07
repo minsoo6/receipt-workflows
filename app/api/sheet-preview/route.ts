@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
       headerRow: settings.headerRow
     });
 
-    const values = receiptFieldValues(fields, uploadedAt, settings.dateFormat);
+    const values = receiptFieldValues(fields, uploadedAt, settings.dateFormat, settings.negativeAmounts);
     const plan = planSheetRow(headers, values);
 
     let guesses: Record<string, string> = {};

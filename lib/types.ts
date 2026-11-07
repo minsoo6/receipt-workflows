@@ -38,6 +38,8 @@ export interface Settings {
   sheetTabName: string;
   /** 1-based row holding the column names. */
   headerRow: number;
+  /** Write the sheet's amount as a negative number, the usual sign for a spend in a ledger. */
+  negativeAmounts: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -48,7 +50,8 @@ export const DEFAULT_SETTINGS: Settings = {
   sheetId: '',
   sheetName: '',
   sheetTabName: 'Receipts',
-  headerRow: 1
+  headerRow: 1,
+  negativeAmounts: true
 };
 
 export interface ExtractedReceiptData {
